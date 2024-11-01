@@ -5,31 +5,38 @@ import os
 import sys
 import logging
 import subprocess
+from PIL import Image, ImageTk
+import numpy as np  # Import NumPy
 
 # Configuration du logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger('VideoGenerator')
+# Suppress DEBUG logs from PIL
+logging.getLogger('PIL').setLevel(logging.WARNING)
 
 class VideoTextGenerator:
     def __init__(self, root):
         self.root = root
         self.root.title("Video Text Generator")
         
-        # Détermination du répertoire du script
+        # Determine the script directory
         if getattr(sys, 'frozen', False):
             script_dir = Path(sys._MEIPASS)
         else:
             script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
         
-        # Chemins vers les dossiers de vidéos
+        # Paths to video folders
         self.lower_case_path = script_dir / "Source" / "LOWER_CASE"
         self.upper_case_path = script_dir / "Source" / "UPPER_CASE"
         
-        # Paramètres vidéo
-        self.VIDEO_DURATION = 10  # Durée en secondes
-        self.VIDEO_WIDTH = 1920   # Largeur en pixels
-        self.VIDEO_HEIGHT = 1080  # Hauteur en pixels
-        self.FPS = "25"           # Images par seconde
+        # Path to preview images
+        self.preview_images_path = script_dir / "PreviewImages"
+        
+        # Video parameters
+        self.VIDEO_DURATION = 10  # Duration in seconds
+        self.VIDEO_WIDTH = 1920   # Width in pixels
+        self.VIDEO_HEIGHT = 1080  # Height in pixels
+        self.FPS = "25"           # Frames per second
         
         # Character width ratios for better spacing
         self.char_width_ratios = {
@@ -38,48 +45,207 @@ class VideoTextGenerator:
             'default': 1.0  # default ratio for all other characters
         }
         
-        # Configuration de l'interface graphique
+        # Initialize parameters with default values
+        self.base_char_size = 150  # default character size
+        self.char_spacing_factor = -0.7  # default character spacing factor
+        self.word_spacing_factor = 0.5   # default word spacing factor
+        
+        # Load preview images
+        self.preview_images = self.load_preview_images()
+        
+        # Set up the GUI
         self.setup_gui()
     
+    def load_preview_images(self):
+        """
+        Loads all preview images into a dictionary for quick access.
+        """
+        images = {}
+        for image_file in self.preview_images_path.glob("*.png"):
+            key = image_file.stem  # e.g., 'lower_a' or 'upper_A'
+            image = Image.open(image_file).convert('RGBA')  # Ensure RGBA mode
+            images[key] = image
+        return images
+
     def setup_gui(self):
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
-        # Champ de saisie du texte
+        # Text input field
         ttk.Label(main_frame, text="Enter text:").grid(row=0, column=0, sticky=tk.W)
         self.text_input = ttk.Entry(main_frame, width=40)
-        self.text_input.insert(0, "Ouais Ouais")  # Texte par défaut
-        self.text_input.grid(row=0, column=1, padx=5, pady=5)
+        self.text_input.insert(0, "Ouais Ouais")  # Default text
+        self.text_input.grid(row=0, column=1, padx=5, pady=5, columnspan=3)
+        self.text_input.bind("<KeyRelease>", self.update_preview)
         
-        # Boutons radio pour choisir la casse
+        # Radio buttons for case selection
         self.case_var = tk.StringVar(value="mixed")
         ttk.Radiobutton(main_frame, text="Uppercase", variable=self.case_var, 
-                       value="upper").grid(row=1, column=0)
+                       value="upper", command=self.update_preview).grid(row=1, column=0)
         ttk.Radiobutton(main_frame, text="Lowercase", variable=self.case_var, 
-                       value="lower").grid(row=1, column=1)
+                       value="lower", command=self.update_preview).grid(row=1, column=1)
         ttk.Radiobutton(main_frame, text="Mixed case", variable=self.case_var, 
-                       value="mixed").grid(row=1, column=2)
+                       value="mixed", command=self.update_preview).grid(row=1, column=2)
         
-        # Bouton pour générer la vidéo
+        # Spacing controls
+        ttk.Label(main_frame, text="Character Size:").grid(row=2, column=0, sticky=tk.W)
+        self.char_size_var = tk.IntVar(value=self.base_char_size)
+        char_size_spin = ttk.Spinbox(main_frame, from_=50, to=300, increment=10, textvariable=self.char_size_var, command=self.update_preview)
+        char_size_spin.grid(row=2, column=1, sticky=tk.W)
+
+        ttk.Label(main_frame, text="Char Spacing:").grid(row=3, column=0, sticky=tk.W)
+        self.char_spacing_var = tk.DoubleVar(value=self.char_spacing_factor)
+        char_spacing_spin = ttk.Spinbox(main_frame, from_=-1.0, to=0.0, increment=0.1, textvariable=self.char_spacing_var, format="%.1f", command=self.update_preview)
+        char_spacing_spin.grid(row=3, column=1, sticky=tk.W)
+
+        ttk.Label(main_frame, text="Word Spacing:").grid(row=4, column=0, sticky=tk.W)
+        self.word_spacing_var = tk.DoubleVar(value=self.word_spacing_factor)
+        word_spacing_spin = ttk.Spinbox(main_frame, from_=0.0, to=1.0, increment=0.1, textvariable=self.word_spacing_var, format="%.1f", command=self.update_preview)
+        word_spacing_spin.grid(row=4, column=1, sticky=tk.W)
+        
+        # Button to generate video
         ttk.Button(main_frame, text="Generate Video", 
-                  command=self.generate_video).grid(row=2, column=1, pady=10)
+                  command=self.generate_video).grid(row=5, column=1, pady=10)
+        
+        # Canvas for preview with 16:9 aspect ratio
+        self.preview_canvas = tk.Canvas(main_frame, width=800, height=450, bg="black")
+        self.preview_canvas.grid(row=6, column=0, columnspan=3, pady=10)
+        
+        # Update preview initially
+        self.update_preview()
+
+    def screen_blend(self, img1, img2):
+        """
+        Blends two images using the 'screen' blend mode.
+        """
+        arr1 = np.array(img1).astype('float') / 255.0
+        arr2 = np.array(img2).astype('float') / 255.0
+
+        # Separate the RGB and alpha channels
+        rgb1 = arr1[..., :3]
+        alpha1 = arr1[..., 3]
+        rgb2 = arr2[..., :3]
+        alpha2 = arr2[..., 3]
+
+        # Compute the screen blending for RGB channels
+        rgb = 1 - (1 - rgb1) * (1 - rgb2)
+
+        # Compute the combined alpha channel
+        alpha = alpha1 + alpha2 * (1 - alpha1)
+
+        # Handle invalid values
+        alpha = np.clip(alpha, 0, 1)
+        rgb = np.clip(rgb, 0, 1)
+
+        # Multiply RGB by alpha
+        rgb = rgb * alpha[..., np.newaxis]
+
+        # Combine RGB and alpha channels
+        result = np.dstack((rgb, alpha))
+
+        # Convert back to uint8
+        result = (result * 255).astype('uint8')
+
+        # Create an image from the result
+        return Image.fromarray(result, 'RGBA')
+
+    def update_preview(self, *args):
+        """
+        Updates the preview canvas to show the current text placement with the blending effect.
+        """
+        # Clear the canvas
+        self.preview_canvas.delete("all")
+        
+        # Get the text
+        text = self.text_input.get().strip()
+        if not text:
+            return
+
+        # Apply chosen case
+        case_choice = self.case_var.get()
+        if case_choice == "upper":
+            text_display = text.upper()
+        elif case_choice == "lower":
+            text_display = text.lower()
+        else:
+            text_display = text
+
+        # Get the parameters from the GUI variables
+        self.base_char_size = self.char_size_var.get()
+        self.char_spacing_factor = self.char_spacing_var.get()
+        self.word_spacing_factor = self.word_spacing_var.get()
+
+        # Base character size and spacing
+        base_char_size = self.base_char_size
+        char_spacing = int(base_char_size * self.char_spacing_factor)
+        word_spacing = int(base_char_size * self.word_spacing_factor)
+
+        # Collect valid characters and their images
+        char_images = []
+        for char in text_display:
+            if char.isalpha():
+                case = "upper" if char.isupper() else "lower"
+                key = f"{case}_{char.lower()}"
+                image = self.preview_images.get(key)
+                if image:
+                    char_images.append(image)
+                else:
+                    logger.warning(f"No preview image for character '{char}'")
+            elif char.isspace():
+                # Add a None to represent space
+                char_images.append(None)
+            else:
+                logger.warning(f"Unsupported character '{char}' in text")
+
+        if not char_images:
+            return
+
+        # Create base image for blending
+        preview_width = int(self.preview_canvas['width'])
+        preview_height = int(self.preview_canvas['height'])
+        base_image = Image.new('RGBA', (preview_width, preview_height), (0, 0, 0, 255))
+
+        # Calculate positions
+        total_width = 0
+        char_positions = []
+        for img in char_images:
+            if img is None:
+                total_width += word_spacing
+                char_positions.append(None)
+            else:
+                total_width += base_char_size + char_spacing
+                char_positions.append(total_width - base_char_size - char_spacing)
+
+        total_width -= char_spacing  # Remove extra spacing
+        x_offset = (preview_width - total_width) // 2
+        y_offset = (preview_height - base_char_size) // 2
+
+        # Blend images using screen blending
+        current_image = base_image.copy()
+        for pos, img in zip(char_positions, char_images):
+            if img is not None and pos is not None:
+                resized_img = img.resize((base_char_size, base_char_size), Image.LANCZOS).convert('RGBA')
+                x = x_offset + pos
+                y = y_offset
+                temp_image = Image.new('RGBA', current_image.size, (0, 0, 0, 0))
+                temp_image.paste(resized_img, (int(x), int(y)), mask=resized_img)
+                # Perform screen blending
+                current_image = self.screen_blend(current_image, temp_image)
+
+        # Convert to Tkinter image
+        tk_image = ImageTk.PhotoImage(current_image.convert('RGB'))
+        self.preview_canvas.image = tk_image  # Keep reference
+        self.preview_canvas.create_image(0, 0, anchor='nw', image=tk_image)
 
     def get_video_path(self, char, case="lower"):
         """
-        Retourne le chemin complet vers le fichier vidéo correspondant au caractère et à la casse spécifiée.
+        Returns the full path to the video file corresponding to the character and specified case.
         """
         base_path = self.lower_case_path if case == "lower" else self.upper_case_path
-        video_file = f"{char}.mp4"
+        video_file = f"{char.lower()}.mp4"
         full_path = base_path / video_file
         logger.debug(f"Looking for video file: {full_path} (exists: {full_path.exists()})")
         return full_path
-
-    def get_char_width(self, char, base_size):
-        """
-        Returns the adjusted width for a specific character based on predefined ratios
-        """
-        ratio = self.char_width_ratios.get(char.lower(), self.char_width_ratios['default'])
-        return int(base_size * ratio)
 
     def generate_video(self):
         """
@@ -240,7 +406,6 @@ class VideoTextGenerator:
         except Exception as e:
             logger.error(f"Error during video generation: {str(e)}", exc_info=True)
             messagebox.showerror("Error", f"An error occurred: {str(e)}")
-
 
 if __name__ == "__main__":
     root = tk.Tk()
