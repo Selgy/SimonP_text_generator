@@ -8,7 +8,7 @@ import subprocess
 from PIL import Image, ImageTk
 import numpy as np  # Import NumPy
 
-# Configuration du logging
+# Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger('VideoGenerator')
 # Suppress DEBUG logs from PIL
@@ -16,62 +16,85 @@ logging.getLogger('PIL').setLevel(logging.WARNING)
 
 class VideoTextGenerator:
     def __init__(self, root):
-        # Define offsets for specific letters (corrected syntax)
+        # Default character size used for scaling
+        self.default_char_size = 300  # Default character size
+
+        # Define vertical offsets for specific letters
         self.letter_offsets = {
             # Uppercase letters
-            'A': -24, 'B': -24, 'C': -24, 'D': -24, 'E': -24, 'F': -24, 'G': -24,
+            'A': -24, 'B': -24, 'C': -20, 'D': -24, 'E': -24, 'F': -24, 'G': -24,
             'H': -24, 'I': -24, 'J': -24, 'K': -24, 'L': -24, 'M': -24, 'N': -24,
             'O': -24, 'P': -24, 'Q': -24, 'R': -24, 'S': -24, 'T': -24, 'U': -24,
             'V': -24, 'W': -24, 'X': -24, 'Y': -24, 'Z': -24,
             # Lowercase letters
             'a': 0, 'b': 0, 'c': 0, 'd': 0, 'e': 0, 'f': 0, 'g': -4,
-            'h': 0, 'i': -4, 'j': -4, 'k': 0, 'l': -4, 'm': 0, 'n': 0,
+            'h': 0, 'i': -5, 'j': -4, 'k': 0, 'l': -4, 'm': 0, 'n': 0,
             'o': 0, 'p': -4, 'q': -4, 'r': 0, 's': 0, 't': -4, 'u': 0,
             'v': -4, 'w': 0, 'x': 0, 'y': -4, 'z': 0,
             # Numbers
             '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0,
             '7': 0, '8': 0, '9': 0
         }
+
+        # Define horizontal spacing offsets for specific letters (left_offset, right_offset)
+        self.letter_spacing_offsets = {
+            # Uppercase letters
+            'A': (-4, -4), 'B': (-4, -4), 'C': (-4, -4), 'D': (-4, -4), 'E': (-4, -4), 'F': (-4, -4), 'G': (-4, -4),
+            'H': (-4, -4), 'I': (-4, -4), 'J': (-4, -4), 'K': (-4, -4), 'L': (-4, -4), 'M': (-4, -4), 'N': (-4, -4),
+            'O': (-4, -4), 'P': (-4, -4), 'Q': (-4, -4), 'R': (-4, -4), 'S': (-4, -4), 'T': (-4, -4), 'U': (-4, -4),
+            'V': (-4, -4), 'W': (-4, -4), 'X': (-4, -4), 'Y': (-4, -4), 'Z': (-4, -4),
+            # Lowercase letters
+            'a': (0, 0), 'b': (0, 0), 'c': (0, 0), 'd': (0, 0), 'e': (0, 0), 'f': (0, 0), 'g': (0, 0),
+            'h': (0, 0), 'i': (0, 0), 'j': (0, 0), 'k': (0, 0), 'l': (0, 0), 'm': (4, 4), 'n': (0, 0),
+            'o': (0, 0), 'p': (0, 0), 'q': (0, 0), 'r': (0, 0), 's': (0, 0), 't': (0, 0), 'u': (0, 0),
+            'v': (0, 0), 'w': (0, 0), 'x': (0, 0), 'y': (0, 0), 'z': (0, 0),
+            # Numbers
+            '0': (0, 0), '1': (0, 0), '2': (0, 0), '3': (0, 0), '4': (0, 0), '5': (0, 0), '6': (0, 0),
+            '7': (0, 0), '8': (0, 0), '9': (0, 0),
+            # Space character
+            ' ': (0, 0)
+        }
+
         self.root = root
         self.root.title("Video Text Generator")
-        
+
         # Determine the script directory
         if getattr(sys, 'frozen', False):
             script_dir = Path(sys._MEIPASS)
         else:
             script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
-        
+
         # Paths to video folders
         self.lower_case_path = script_dir / "Source" / "LOWER_CASE"
         self.upper_case_path = script_dir / "Source" / "UPPER_CASE"
-        
+
         # Path to preview images
         self.preview_images_path = script_dir / "PreviewImages"
-        
+
         # Video parameters
         self.VIDEO_DURATION = 10  # Duration in seconds
         self.VIDEO_WIDTH = 1920   # Width in pixels
         self.VIDEO_HEIGHT = 1080  # Height in pixels
         self.FPS = "25"           # Frames per second
-        
+
         # Character width ratios for better spacing
         self.char_width_ratios = {
             'm': 1.2,  # m is wider
             'w': 1.2,  # w is wider
             'default': 1.0  # default ratio for all other characters
         }
-        
+
         # Initialize parameters with default values
-        self.base_char_size = 150  # default character size
+        self.base_char_size = self.default_char_size  # Start with default character size
         self.char_spacing_factor = -0.7  # default character spacing factor
         self.space_width = 20  # default space width
-        
+
         # Load preview images
         self.preview_images = self.load_preview_images()
-        
+
         # Set up the GUI
         self.setup_gui()
-    
+
     def load_preview_images(self):
         """
         Loads all preview images into a dictionary for quick access.
@@ -86,42 +109,44 @@ class VideoTextGenerator:
     def setup_gui(self):
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
+
         # Text input field
         ttk.Label(main_frame, text="Enter text:").grid(row=0, column=0, sticky=tk.W)
         self.text_input = ttk.Entry(main_frame, width=40)
         self.text_input.insert(0, "Ouais Ouais")  # Default text
         self.text_input.grid(row=0, column=1, padx=5, pady=5, columnspan=3)
         self.text_input.bind("<KeyRelease>", self.update_preview)
-        
+
         # Radio buttons for case selection
         self.case_var = tk.StringVar(value="mixed")
-        ttk.Radiobutton(main_frame, text="Uppercase", variable=self.case_var, 
-                       value="upper", command=self.update_preview).grid(row=1, column=0)
-        ttk.Radiobutton(main_frame, text="Lowercase", variable=self.case_var, 
-                       value="lower", command=self.update_preview).grid(row=1, column=1)
-        ttk.Radiobutton(main_frame, text="Mixed case", variable=self.case_var, 
-                       value="mixed", command=self.update_preview).grid(row=1, column=2)
-        
+        ttk.Radiobutton(main_frame, text="Uppercase", variable=self.case_var,
+                        value="upper", command=self.update_preview).grid(row=1, column=0)
+        ttk.Radiobutton(main_frame, text="Lowercase", variable=self.case_var,
+                        value="lower", command=self.update_preview).grid(row=1, column=1)
+        ttk.Radiobutton(main_frame, text="Mixed case", variable=self.case_var,
+                        value="mixed", command=self.update_preview).grid(row=1, column=2)
+
         # Spacing controls
         ttk.Label(main_frame, text="Character Size:").grid(row=2, column=0, sticky=tk.W)
         self.char_size_var = tk.IntVar(value=self.base_char_size)
-        char_size_spin = ttk.Spinbox(main_frame, from_=50, to=300, increment=10, textvariable=self.char_size_var, command=self.update_preview)
+        char_size_spin = ttk.Spinbox(main_frame, from_=50, to=400, increment=10,
+                                     textvariable=self.char_size_var, command=self.update_preview)
         char_size_spin.grid(row=2, column=1, sticky=tk.W)
 
         ttk.Label(main_frame, text="Char Spacing:").grid(row=3, column=0, sticky=tk.W)
         self.char_spacing_var = tk.DoubleVar(value=self.char_spacing_factor)
-        char_spacing_spin = ttk.Spinbox(main_frame, from_=-1.0, to=0.0, increment=0.1, textvariable=self.char_spacing_var, format="%.1f", command=self.update_preview)
+        char_spacing_spin = ttk.Spinbox(main_frame, from_=-1.0, to=0.0, increment=0.1,
+                                        textvariable=self.char_spacing_var, format="%.1f", command=self.update_preview)
         char_spacing_spin.grid(row=3, column=1, sticky=tk.W)
-        
+
         # Button to generate video
-        ttk.Button(main_frame, text="Generate Video", 
-                  command=self.generate_video).grid(row=4, column=1, pady=10)
-        
+        ttk.Button(main_frame, text="Generate Video",
+                   command=self.generate_video).grid(row=4, column=1, pady=10)
+
         # Canvas for preview with 16:9 aspect ratio
         self.preview_canvas = tk.Canvas(main_frame, width=800, height=450, bg="black")
         self.preview_canvas.grid(row=5, column=0, columnspan=3, pady=10)
-        
+
         # Update preview initially
         self.update_preview()
 
@@ -160,15 +185,13 @@ class VideoTextGenerator:
         # Create an image from the result
         return Image.fromarray(result, 'RGBA')
 
-
-
     def update_preview(self, *args):
         """
         Updates the preview canvas to show the current text placement with the blending effect.
         """
         # Clear the canvas
         self.preview_canvas.delete("all")
-        
+
         # Get the text
         text = self.text_input.get().strip()
         if not text:
@@ -184,67 +207,102 @@ class VideoTextGenerator:
             text_display = text
 
         # Get the parameters from the GUI variables
-        self.base_char_size = self.char_size_var.get()
-        self.char_spacing_factor = self.char_spacing_var.get()
+        base_char_size = self.char_size_var.get()
+        char_spacing_factor = self.char_spacing_var.get()
+        char_spacing = int(base_char_size * char_spacing_factor)
+        space_width = self.space_width
+
+        # Calculate vertical scaling factor
+        vertical_scale = base_char_size / self.default_char_size
 
         # Base character size and spacing
-        base_char_size = self.base_char_size
-        char_spacing = int(base_char_size * self.char_spacing_factor)
-
         # Calculate total width considering character sizes and spacing
         total_width = 0
         char_positions = []
-        
+
         for i, char in enumerate(text_display):
-            if char.isalpha():
+            if char.isalpha() or char.isdigit():
                 case = "upper" if char.isupper() else "lower"
-                # Adjust size and spacing for uppercase characters
-                current_char_size = int(base_char_size * 1.2) if case == "upper" else base_char_size
+
+                # Get left and right spacing offsets
+                left_offset, right_offset = self.letter_spacing_offsets.get(char, (0, 0))
+
+                # Apply left offset
+                total_width += left_offset
+
                 # Add extra spacing before uppercase characters (except first character)
                 if i > 0 and case == "upper":
                     total_width += int(base_char_size * 0.2)  # Add 20% of base size as extra spacing
-                
+
+                # Adjust size for uppercase characters
+                current_char_size = int(base_char_size * 1.2) if case == "upper" else base_char_size
+
+                # Store position
                 char_positions.append((total_width, current_char_size))
-                total_width += current_char_size + char_spacing
-                
+                total_width += current_char_size
+
+                # Apply right offset
+                total_width += right_offset
+
+                # Add spacing between characters (except last character)
+                if i < len(text_display) - 1:
+                    total_width += char_spacing
+
             elif char.isspace():
-                total_width += self.space_width
+                # Get left and right spacing offsets for space
+                left_offset, right_offset = self.letter_spacing_offsets.get(' ', (0, 0))
+                total_width += left_offset
+
                 char_positions.append(None)
+                total_width += space_width
+
+                total_width += right_offset
 
         if not char_positions:
             return
 
-        # Remove extra spacing from the last character
-        total_width -= char_spacing
-
         # Create base image for blending
-        preview_width = int(self.preview_canvas['width'])
-        preview_height = int(self.preview_canvas['height'])
-        base_image = Image.new('RGBA', (preview_width, preview_height), (0, 0, 0, 255))
+        canvas_width = int(self.preview_canvas['width'])
+        canvas_height = int(self.preview_canvas['height'])
+        base_image = Image.new('RGBA', (canvas_width, canvas_height), (0, 0, 0, 255))
+
+        # Scaling factor from video size to canvas size
+        scale_x = canvas_width / self.VIDEO_WIDTH
+        scale_y = canvas_height / self.VIDEO_HEIGHT
+        scale = min(scale_x, scale_y)  # Maintain aspect ratio
+
+        # Scale positions and sizes
+        scaled_char_positions = []
+        for pos in char_positions:
+            if pos is not None:
+                x, size = pos
+                scaled_x = int(x * scale)
+                scaled_size = int(size * scale)
+                scaled_char_positions.append((scaled_x, scaled_size))
+            else:
+                scaled_char_positions.append(None)
+        scaled_total_width = int(total_width * scale)
 
         # Calculate center offset
-        x_offset = (preview_width - total_width) // 2
-        y_offset = (preview_height - base_char_size) // 2
+        y_offset = (canvas_height - base_char_size * scale) // 2
+        x_offset = (canvas_width - scaled_total_width) // 2
 
         # Blend images
         current_image = base_image.copy()
         char_index = 0
-        
-        for i, (position, char) in enumerate(zip(char_positions, text_display)):
-            # Apply offset if the character has one
-            
+
+        for i, (position, char) in enumerate(zip(scaled_char_positions, text_display)):
             if position is not None:
                 case = "upper" if char.isupper() else "lower"
                 key = f"{case}_{char.lower()}"
                 img = self.preview_images.get(key)
-                
+
                 if img:
                     x, char_size = position
                     # Adjust y position for uppercase characters and apply custom vertical offset
-                    y_pos = y_offset + self.letter_offsets.get(char, 0)  # Apply custom vertical offset
-                
-                    y = y_offset + self.letter_offsets.get(char, 0)
-                    
+                    original_y_offset = self.letter_offsets.get(char, 0)
+                    y_pos = y_offset + int(original_y_offset * vertical_scale * scale)  # Apply scaled vertical offset
+
                     resized_img = img.resize((char_size, char_size), Image.LANCZOS).convert('RGBA')
                     temp_image = Image.new('RGBA', current_image.size, (0, 0, 0, 0))
                     temp_image.paste(resized_img, (int(x_offset + x), int(y_pos)), mask=resized_img)
@@ -254,8 +312,6 @@ class VideoTextGenerator:
         tk_image = ImageTk.PhotoImage(current_image.convert('RGB'))
         self.preview_canvas.image = tk_image  # Keep reference
         self.preview_canvas.create_image(0, 0, anchor='nw', image=tk_image)
-
-
 
     def get_video_path(self, char, case="lower"):
         """
@@ -305,10 +361,14 @@ class VideoTextGenerator:
             if not valid_chars:
                 raise ValueError("No valid characters to process")
 
-            # Base character size and spacing calculations
-            base_char_size = 300
-            char_spacing = int(base_char_size * -0.7)  # Base overlap between characters
-            space_width = 50  # Fixed space width
+            # Get parameters from GUI variables
+            base_char_size = self.char_size_var.get()
+            char_spacing_factor = self.char_spacing_var.get()
+            char_spacing = int(base_char_size * char_spacing_factor)
+            space_width = self.space_width
+
+            # Calculate vertical scaling factor
+            vertical_scale = base_char_size / self.default_char_size
 
             # Calculate total width considering individual character widths and spacing
             total_width = 0
@@ -316,26 +376,45 @@ class VideoTextGenerator:
             current_x = 0
 
             for i, (char_index, path) in enumerate(valid_chars):
+                char = text[char_index]
+
                 if path is None:  # Space character
-                    current_x += space_width
+                    # Get left and right spacing offsets for space
+                    left_offset, right_offset = self.letter_spacing_offsets.get(' ', (0, 0))
+                    current_x += left_offset
+
                     char_positions.append(None)
+                    current_x += space_width
+
+                    current_x += right_offset
                 else:
-                    char = text[char_index]
                     case = "upper" if char.isupper() else "lower"
-                    
+
+                    # Get left and right spacing offsets
+                    left_offset, right_offset = self.letter_spacing_offsets.get(char, (0, 0))
+
+                    # Apply left offset
+                    current_x += left_offset
+
                     # Add extra spacing before uppercase characters (except first character)
                     if i > 0 and case == "upper":
                         current_x += int(base_char_size * 0.2)  # Add 20% of base size as extra spacing
-                    
+
                     # Adjust size for uppercase characters
                     char_width = int(base_char_size * 1.2) if case == "upper" else base_char_size
-                    
-                    # Add spacing between characters (except before first character)
-                    if i > 0:
-                        current_x += char_spacing
-                    
+
+                    # Store position
                     char_positions.append((current_x, char_width))
+
+                    # Advance current_x by character width
                     current_x += char_width
+
+                    # Apply right offset
+                    current_x += right_offset
+
+                    # Add spacing between characters (overlap), except for last character
+                    if i < len(valid_chars) - 1:
+                        current_x += char_spacing
 
             total_width = current_x
 
@@ -351,6 +430,8 @@ class VideoTextGenerator:
                     (int(pos[0] * scale_factor), int(pos[1] * scale_factor)) if pos is not None else None
                     for pos in char_positions
                 ]
+                # Recalculate vertical scaling factor after scaling
+                vertical_scale = base_char_size / self.default_char_size
 
             # Center the text horizontally
             x_offset = (self.VIDEO_WIDTH - total_width) // 2
@@ -373,13 +454,13 @@ class VideoTextGenerator:
             input_index = 0
 
             for i, ((char_index, path), position) in enumerate(zip(valid_chars, char_positions)):
+                char = text[char_index]
+
                 if path is not None and position is not None:
                     x_pos, char_width = position
-                    
-                    # Adjust y position for uppercase characters
-                    char = text[char_index]
-                    case = "upper" if char.isupper() else "lower"
-                    y_pos = y_base + self.letter_offsets.get(char, 0)
+
+                    # Adjust y position for characters and apply custom vertical offset
+                    y_pos = y_base + int(self.letter_offsets.get(char, 0) * vertical_scale)
 
                     # Scale and position each character
                     filter_parts.append(
@@ -437,7 +518,6 @@ class VideoTextGenerator:
         except Exception as e:
             logger.error(f"Error during video generation: {str(e)}", exc_info=True)
             messagebox.showerror("Error", f"An error occurred: {str(e)}")
-
 
 if __name__ == "__main__":
     root = tk.Tk()
