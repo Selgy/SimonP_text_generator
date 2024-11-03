@@ -22,15 +22,15 @@ class VideoTextGenerator:
         # Define vertical offsets for specific letters
         self.letter_offsets = {
             # Uppercase letters
-            'A': -24, 'B': -24, 'C': -20, 'D': -24, 'E': -24, 'F': -24, 'G': -24,
-            'H': -24, 'I': -24, 'J': -24, 'K': -24, 'L': -24, 'M': -24, 'N': -24,
-            'O': -24, 'P': -24, 'Q': -24, 'R': -24, 'S': -24, 'T': -24, 'U': -24,
-            'V': -24, 'W': -24, 'X': -24, 'Y': -24, 'Z': -24,
+            'A': -50, 'B': -50, 'C': -50, 'D': -50, 'E': -50, 'F': -50, 'G': -50,
+            'H': -50, 'I': -50, 'J': -50, 'K': -50, 'L': -50, 'M': -50, 'N': -50,
+            'O': -50, 'P': -50, 'Q': -50, 'R': -50, 'S': -50, 'T': -50, 'U': -50,
+            'V': -50, 'W': -50, 'X': -50, 'Y': -50, 'Z': -50,
             # Lowercase letters
-            'a': 0, 'b': 0, 'c': 0, 'd': 0, 'e': 0, 'f': 0, 'g': -4,
-            'h': 0, 'i': -5, 'j': -4, 'k': 0, 'l': -4, 'm': 0, 'n': 0,
-            'o': 0, 'p': -4, 'q': -4, 'r': 0, 's': 0, 't': -4, 'u': 0,
-            'v': -4, 'w': 0, 'x': 0, 'y': -4, 'z': 0,
+            'a': 0, 'b': 0, 'c': 0, 'd': -10, 'e': 0, 'f': -10, 'g': 10,
+            'h': 0, 'i': -10, 'j': -8, 'k': -10, 'l': -8, 'm': 0, 'n': 0,
+            'o': 0, 'p': 10, 'q': 10, 'r': 0, 's': 0, 't': -8, 'u': 0,
+            'v': -8, 'w': -8, 'x': 0, 'y': 15, 'z': 10,
             # Numbers
             '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0,
             '7': 0, '8': 0, '9': 0
@@ -40,14 +40,14 @@ class VideoTextGenerator:
         self.letter_spacing_offsets = {
             # Uppercase letters
             'A': (-4, -4), 'B': (-4, -4), 'C': (-4, -4), 'D': (-4, -4), 'E': (-4, -4), 'F': (-4, -4), 'G': (-4, -4),
-            'H': (-4, -4), 'I': (-4, -4), 'J': (-4, -4), 'K': (-4, -4), 'L': (-4, -4), 'M': (-4, -4), 'N': (-4, -4),
+            'H': (-4, -4), 'I': (-4, -4), 'J': (-4, -4), 'K': (-4, -4), 'L': (-4, -4), 'M': (4, 4), 'N': (-4, -4),
             'O': (-4, -4), 'P': (-4, -4), 'Q': (-4, -4), 'R': (-4, -4), 'S': (-4, -4), 'T': (-4, -4), 'U': (-4, -4),
             'V': (-4, -4), 'W': (-4, -4), 'X': (-4, -4), 'Y': (-4, -4), 'Z': (-4, -4),
             # Lowercase letters
             'a': (0, 0), 'b': (0, 0), 'c': (0, 0), 'd': (0, 0), 'e': (0, 0), 'f': (0, 0), 'g': (0, 0),
-            'h': (0, 0), 'i': (0, 0), 'j': (0, 0), 'k': (0, 0), 'l': (0, 0), 'm': (4, 4), 'n': (0, 0),
-            'o': (0, 0), 'p': (0, 0), 'q': (0, 0), 'r': (0, 0), 's': (0, 0), 't': (0, 0), 'u': (0, 0),
-            'v': (0, 0), 'w': (0, 0), 'x': (0, 0), 'y': (0, 0), 'z': (0, 0),
+            'h': (0, 0), 'i': (-10, -10), 'j': (-10, -10), 'k': (0, 0), 'l': (-10, -10), 'm': (4, 4), 'n': (0, 0),
+            'o': (0, 0), 'p': (0, 0), 'q': (0, 0), 'r': (0, 0), 's': (0, 0), 't': (-10, -10), 'u': (0, 0),
+            'v': (0, 0), 'w': (16, 10), 'x': (0, 0), 'y': (0, 0), 'z': (0, 0),
             # Numbers
             '0': (0, 0), '1': (0, 0), '2': (0, 0), '3': (0, 0), '4': (0, 0), '5': (0, 0), '6': (0, 0),
             '7': (0, 0), '8': (0, 0), '9': (0, 0),
@@ -86,7 +86,7 @@ class VideoTextGenerator:
 
         # Initialize parameters with default values
         self.base_char_size = self.default_char_size  # Start with default character size
-        self.char_spacing_factor = -0.7  # default character spacing factor
+        self.char_spacing_factor = -0.8  # default character spacing factor
         self.space_width = 20  # default space width
 
         # Load preview images
@@ -113,7 +113,7 @@ class VideoTextGenerator:
         # Text input field
         ttk.Label(main_frame, text="Enter text:").grid(row=0, column=0, sticky=tk.W)
         self.text_input = ttk.Entry(main_frame, width=40)
-        self.text_input.insert(0, "Ouais Ouais")  # Default text
+        self.text_input.insert(0, "Micronation")  # Default text
         self.text_input.grid(row=0, column=1, padx=5, pady=5, columnspan=3)
         self.text_input.bind("<KeyRelease>", self.update_preview)
 
@@ -135,8 +135,8 @@ class VideoTextGenerator:
 
         ttk.Label(main_frame, text="Char Spacing:").grid(row=3, column=0, sticky=tk.W)
         self.char_spacing_var = tk.DoubleVar(value=self.char_spacing_factor)
-        char_spacing_spin = ttk.Spinbox(main_frame, from_=-1.0, to=0.0, increment=0.1,
-                                        textvariable=self.char_spacing_var, format="%.1f", command=self.update_preview)
+        char_spacing_spin = ttk.Spinbox(main_frame, from_=-1.0, to=0.0, increment=0.05,
+                                        textvariable=self.char_spacing_var, format="%.2f", command=self.update_preview)
         char_spacing_spin.grid(row=3, column=1, sticky=tk.W)
 
         # Button to generate video
