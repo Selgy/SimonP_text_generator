@@ -430,69 +430,103 @@ const generateVideoHandler = async () => {
       : caseVar.value === 'lower' 
         ? text.value.toLowerCase()
         : text.value;
+    console.log('Formatted text:', formattedText);
 
     // Split text into characters and fetch video files
     const characters = formattedText.split('');
     const videoBlobs = [];
 
+    console.log('Fetching video files...');
     // Fetch video files for each character
     for (let i = 0; i < characters.length; i++) {
       const char = characters[i];
-      if (char === ' ') {
-        const response = await fetch('/Source/blank.mp4');
-        if (!response.ok) throw new Error('Silent video not found');
-        const blob = await response.blob();
-        videoBlobs.push(new Uint8Array(await blob.arrayBuffer()));
-      } else {
-        const caseType = char === char.toUpperCase() ? 'UPPER_CASE' : 'LOWER_CASE';
-        const videoPath = `/Source/${caseType}/${char.toLowerCase()}.mp4`;
-        
-        const response = await fetch(videoPath);
-        if (!response.ok) throw new Error(`Video for character "${char}" not found`);
-        const blob = await response.blob();
-        videoBlobs.push(new Uint8Array(await blob.arrayBuffer()));
-      }
+      try {
+        if (char === ' ') {
+          console.log('Fetching blank video...');
+          const response = await fetch('/Source/blank.mp4');
+          if (!response.ok) throw new Error('Silent video not found');
+          const blob = await response.blob();
+          videoBlobs.push(new Uint8Array(await blob.arrayBuffer()));
+        } else {
+          const caseType = char === char.toUpperCase() ? 'UPPER_CASE' : 'LOWER_CASE';
+          const videoPath = `/Source/${caseType}/${char.toLowerCase()}.mp4`;
+          console.log('Fetching video:', videoPath);
+          
+          const response = await fetch(videoPath);
+          if (!response.ok) {
+            console.error(`Failed to fetch video at path: ${videoPath}`);
+            throw new Error(`Video for character "${char}" not found`);
+          }
+          const blob = await response.blob();
+          videoBlobs.push(new Uint8Array(await blob.arrayBuffer()));
+        }
 
-      progress.value = Math.round(((i + 1) / characters.length) * 50);
-      progressMessage.value = `Loading videos: ${i + 1}/${characters.length}`;
+        progress.value = Math.round(((i + 1) / characters.length) * 50);
+        progressMessage.value = `Loading videos: ${i + 1}/${characters.length}`;
+        console.log(`Loaded video ${i + 1}/${characters.length}`);
+      } catch (error) {
+        console.error(`Error loading video for character "${char}":`, error);
+        throw error;
+      }
     }
 
+    console.log('Writing concatenation list...');
     // Write concatenation list
     const fileList = videoBlobs.map((_, i) => `file 'char_${i}.mp4'`).join('\n');
     await ffmpeg.writeFile('filelist.txt', new TextEncoder().encode(fileList));
+    console.log('Concatenation list written');
 
+    console.log('Writing video files...');
     // Write video files
     for (let i = 0; i < videoBlobs.length; i++) {
-      await ffmpeg.writeFile(`char_${i}.mp4`, videoBlobs[i]);
-      progress.value = 50 + Math.round(((i + 1) / videoBlobs.length) * 25);
+      try {
+        await ffmpeg.writeFile(`char_${i}.mp4`, videoBlobs[i]);
+        console.log(`Written video file ${i + 1}/${videoBlobs.length}`);
+        progress.value = 50 + Math.round(((i + 1) / videoBlobs.length) * 25);
+      } catch (error) {
+        console.error(`Error writing video file ${i}:`, error);
+        throw error;
+      }
     }
 
+    console.log('Executing FFmpeg command...');
     // Execute FFmpeg command
-    await ffmpeg.exec([
-      '-f', 'concat',
-      '-safe', '0',
-      '-i', 'filelist.txt',
-      '-c', 'copy',
-      '-y',
-      'output.mp4'
-    ]);
+    try {
+      await ffmpeg.exec([
+        '-f', 'concat',
+        '-safe', '0',
+        '-i', 'filelist.txt',
+        '-c', 'copy',
+        '-y',
+        'output.mp4'
+      ]);
+      console.log('FFmpeg command completed');
+    } catch (error) {
+      console.error('FFmpeg command failed:', error);
+      throw error;
+    }
 
+    console.log('Reading output file...');
     // Read the output file
     const outputData = await ffmpeg.readFile('output.mp4');
+    console.log('Output file read, creating blob...');
     const videoBlob = new Blob([outputData], { type: 'video/mp4' });
     
     // Revoke previous video URL if it exists
     if (videoUrl.value) {
       URL.revokeObjectURL(videoUrl.value);
+      console.log('Revoked previous video URL');
     }
     
     videoUrl.value = URL.createObjectURL(videoBlob);
+    console.log('New video URL created');
 
   } catch (error) {
     console.error('Video generation error:', error);
-    errorMessage.value = 'Failed to generate video. Please try again.';
+    errorMessage.value = `Failed to generate video: ${error.message}`;
   } finally {
     generating.value = false;
+    console.log('Video generation completed');
   }
 };
 
