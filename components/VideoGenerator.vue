@@ -406,19 +406,19 @@ const updatePreview = async () => {
 // Function to generate video
 const generateVideoHandler = async () => {
   if (!text.value.trim()) {
-    errorMessage.value = 'Please enter some text'
-    return
+    errorMessage.value = 'Please enter some text';
+    return;
   }
 
   if (!isFFmpegLoaded.value || !ffmpegInstance.value) {
-    errorMessage.value = 'FFmpeg is still loading. Please wait a moment.'
-    return
+    errorMessage.value = 'FFmpeg is still loading. Please wait a moment.';
+    return;
   }
 
-  generating.value = true
-  progress.value = 0
-  progressMessage.value = 'Preparing to generate video...'
-  errorMessage.value = ''
+  generating.value = true;
+  progress.value = 0;
+  progressMessage.value = 'Preparing to generate video...';
+  errorMessage.value = '';
 
   try {
     const ffmpeg = ffmpegInstance.value;
@@ -432,138 +432,69 @@ const generateVideoHandler = async () => {
         : text.value;
 
     // Split text into characters and fetch video files
-    const characters = formattedText.split('')
-    const videoBlobs = []
+    const characters = formattedText.split('');
+    const videoBlobs = [];
 
     // Fetch video files for each character
     for (let i = 0; i < characters.length; i++) {
-      const char = characters[i]
+      const char = characters[i];
       if (char === ' ') {
-        // Handle space character
-        const response = await fetch('/Source/blank.mp4')
-        if (!response.ok) throw new Error('Silent video not found')
-        const blob = await response.blob()
-        videoBlobs.push(await $ffmpeg.fetchFile(blob))
+        const response = await fetch('/Source/blank.mp4');
+        if (!response.ok) throw new Error('Silent video not found');
+        const blob = await response.blob();
+        videoBlobs.push(new Uint8Array(await blob.arrayBuffer()));
       } else {
-        // Handle regular characters
-        const caseType = char === char.toUpperCase() ? 'UPPER_CASE' : 'LOWER_CASE'
-        const videoPath = `/Source/${caseType}/${char.toLowerCase()}.mp4`
+        const caseType = char === char.toUpperCase() ? 'UPPER_CASE' : 'LOWER_CASE';
+        const videoPath = `/Source/${caseType}/${char.toLowerCase()}.mp4`;
         
-        const response = await fetch(videoPath)
-        if (!response.ok) throw new Error(`Video for character "${char}" not found`)
-        const blob = await response.blob()
-        videoBlobs.push(await $ffmpeg.fetchFile(blob))
+        const response = await fetch(videoPath);
+        if (!response.ok) throw new Error(`Video for character "${char}" not found`);
+        const blob = await response.blob();
+        videoBlobs.push(new Uint8Array(await blob.arrayBuffer()));
       }
 
-      // Update progress
-      progress.value = Math.round(((i + 1) / characters.length) * 50)
-      progressMessage.value = `Loading videos: ${i + 1}/${characters.length}`
+      progress.value = Math.round(((i + 1) / characters.length) * 50);
+      progressMessage.value = `Loading videos: ${i + 1}/${characters.length}`;
     }
 
-    // Create directory
-    await ffmpeg.FS('mkdir', '/tmp');
-    console.log('Created /tmp directory');
+    // Write concatenation list
+    const fileList = videoBlobs.map((_, i) => `file 'char_${i}.mp4'`).join('\n');
+    await ffmpeg.writeFile('filelist.txt', new TextEncoder().encode(fileList));
 
     // Write video files
-    console.log('Writing files to filesystem...');
-    try {
-      for (let i = 0; i < videoBlobs.length; i++) {
-        const data = videoBlobs[i] instanceof Uint8Array 
-          ? videoBlobs[i] 
-          : new Uint8Array(videoBlobs[i]);
-        
-        await ffmpeg.FS('writeFile', `/tmp/char_${i}.mp4`, data);
-        console.log(`Successfully wrote file /tmp/char_${i}.mp4`);
-        
-        // Update progress
-        progress.value = Math.round(((i + 1) / characters.length) * 50);
-        progressMessage.value = `Loading videos: ${i + 1}/${characters.length}`;
-      }
-
-      // Create concatenation file list
-      console.log('Creating concat file list...');
-      const fileList = videoBlobs.map((_, i) => `file '/tmp/char_${i}.mp4'`).join('\n');
-      console.log('File list content:', fileList);
-
-      // Write the file list
-      await ffmpeg.FS('writeFile', '/tmp/filelist.txt', new TextEncoder().encode(fileList));
-      console.log('Successfully wrote filelist.txt');
-
-      // Execute FFmpeg command
-      console.log('Executing FFmpeg command...');
-      await ffmpeg.exec([
-        '-f', 'concat',
-        '-safe', '0',
-        '-i', '/tmp/filelist.txt',
-        '-c', 'copy',
-        '-movflags', '+faststart',
-        '-y',
-        '/tmp/output.mp4'
-      ]);
-      console.log('FFmpeg command completed successfully');
-
-      // Read the output file
-      const outputData = await ffmpeg.FS('readFile', '/tmp/output.mp4');
-      console.log('Successfully read output file, size:', outputData.length);
-
-      // Revoke previous video URL if it exists
-      if (videoUrl.value) {
-        URL.revokeObjectURL(videoUrl.value)
-        console.log('Revoked previous video URL')
-      }
-
-      // Create blob and URL
-      const videoBlob = new Blob([outputData], { type: 'video/mp4' });
-      videoUrl.value = URL.createObjectURL(videoBlob);
-      console.log('Created new video URL')
-
-    } catch (error) {
-      console.error('Video generation error:', error)
-      throw error
-    } finally {
-      // Cleanup temporary video files
-      console.log('Cleaning up temporary video files...');
-      try {
-        const files = [
-          '/tmp/filelist.txt',
-          '/tmp/output.mp4',
-          ...Array.from({length: videoBlobs.length}, (_, i) => `/tmp/char_${i}.mp4`)
-        ];
-        
-        for (const file of files) {
-          try {
-            await ffmpeg.FS('unlink', file);
-            console.log(`Deleted temporary file: ${file}`)
-          } catch (e) {
-            // Ignore errors if file doesn't exist
-            console.warn(`Could not delete ${file}:`, e);
-          }
-        }
-      } catch (e) {
-        console.warn('Cleanup warning:', e);
-      }
-      console.log('Temporary video files cleanup completed')
+    for (let i = 0; i < videoBlobs.length; i++) {
+      await ffmpeg.writeFile(`char_${i}.mp4`, videoBlobs[i]);
+      progress.value = 50 + Math.round(((i + 1) / videoBlobs.length) * 25);
     }
+
+    // Execute FFmpeg command
+    await ffmpeg.exec([
+      '-f', 'concat',
+      '-safe', '0',
+      '-i', 'filelist.txt',
+      '-c', 'copy',
+      '-y',
+      'output.mp4'
+    ]);
+
+    // Read the output file
+    const outputData = await ffmpeg.readFile('output.mp4');
+    const videoBlob = new Blob([outputData], { type: 'video/mp4' });
+    
+    // Revoke previous video URL if it exists
+    if (videoUrl.value) {
+      URL.revokeObjectURL(videoUrl.value);
+    }
+    
+    videoUrl.value = URL.createObjectURL(videoBlob);
 
   } catch (error) {
-    console.error('Video generation error:', error)
-    errorMessage.value = 'Failed to generate video. Please try again.'
+    console.error('Video generation error:', error);
+    errorMessage.value = 'Failed to generate video. Please try again.';
   } finally {
-    // Final Cleanup
-    try {
-      console.log('Finalizing cleanup...');
-      const ffmpeg = ffmpegInstance.value;
-      
-      // Revoke previous video URL if it exists (already handled above)
-      // Ensure no residual Blob URLs are left
-
-      console.log('Final cleanup completed')
-    } catch (cleanupError) {
-      console.error('Error during final cleanup:', cleanupError)
-    }
-    generating.value = false
+    generating.value = false;
   }
-}
+};
 
 // Watch for changes to trigger preview update
 watch([text, caseVar, charSizeVar, charSpacingVar], () => {
