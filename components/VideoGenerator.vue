@@ -100,6 +100,22 @@
               />
             </div>
 
+            <!-- Video Duration -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Video Duration: {{ videoDurationVar }} seconds
+              </label>
+              <input
+                type="range"
+                v-model.number="videoDurationVar"
+                @input="updatePreview"
+                min="1"
+                max="15"
+                step="1"
+                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+
             <!-- Preview -->
             <div>
               <h3 class="text-lg font-medium text-gray-700 mb-2">Preview</h3>
@@ -188,7 +204,6 @@ import { useNuxtApp } from '#app'
 const VIDEO_WIDTH = 1920
 const VIDEO_HEIGHT = 1080
 const DEFAULT_CHAR_SIZE = 300
-const VIDEO_DURATION = 3 // Duration in seconds
 const FPS = "25" // Frames per second
 
 // Reactive variables
@@ -252,6 +267,9 @@ const letterSpacingOffsets = {
   '5': [0, 0], '6': [0, 0], '7': [0, 0], '8': [0, 0], '9': [0, 0],
   ' ': [0, 0]
 }
+
+// Add new reactive variable (after other ref declarations)
+const videoDurationVar = ref(5) // Default 7 seconds
 
 // Add missing computed property for formattedText
 const formattedText = computed(() => {
@@ -499,7 +517,7 @@ const generateVideoHandler = async () => {
     }
 
     // Build FFmpeg command
-    let filterComplex = `color=black:s=${VIDEO_WIDTH}x${VIDEO_HEIGHT}:d=${VIDEO_DURATION}:r=${FPS}[bg];`
+    let filterComplex = `color=black:s=${VIDEO_WIDTH}x${VIDEO_HEIGHT}:d=${videoDurationVar.value}:r=${FPS}[bg];`
     let current = 'bg'
 
     const positions = calculateCharacterPositions(formattedText.value)
@@ -517,7 +535,7 @@ const generateVideoHandler = async () => {
 
           // Create temporary black background for each character
           filterComplex += `[${videoIndex}:v]scale=${width}:${width},setsar=1,format=gbrp[s${videoIndex}];`
-          filterComplex += `color=black@0:s=${VIDEO_WIDTH}x${VIDEO_HEIGHT}:d=${VIDEO_DURATION}[tmp${videoIndex}];`
+          filterComplex += `color=black@0:s=${VIDEO_WIDTH}x${VIDEO_HEIGHT}:d=${videoDurationVar.value}[tmp${videoIndex}];`
           
           // Overlay character on black background
           filterComplex += `[tmp${videoIndex}][s${videoIndex}]overlay=x=${x}:y=${y}:format=auto[overlay${videoIndex}];`
@@ -543,7 +561,7 @@ const generateVideoHandler = async () => {
       '-preset', 'medium',
       '-crf', '18',
       '-r', FPS,
-      '-t', VIDEO_DURATION.toString(),
+      '-t', videoDurationVar.value.toString(),
       '-pix_fmt', 'yuv420p',
       'output.mp4'
     ]
@@ -652,7 +670,7 @@ const calculateCharacterPositions = (text) => {
 }
 
 // Watch for changes to trigger preview update
-watch([text, caseVar, charSizeVar, charSpacingVar], () => {
+watch([text, caseVar, charSizeVar, charSpacingVar, videoDurationVar], () => {
   if (previewLoaded.value) {
     updatePreview()
   }
