@@ -516,13 +516,13 @@ const generateVideoHandler = async () => {
                    verticalOffset * (charSizeVar.value / DEFAULT_CHAR_SIZE)
 
           // Create temporary black background for each character
-          filterComplex += `[${videoIndex}:v]scale=${width}:${width}[s${videoIndex}];`
-          filterComplex += `color=black:s=${VIDEO_WIDTH}x${VIDEO_HEIGHT}:d=${VIDEO_DURATION}[tmp${videoIndex}];`
+          filterComplex += `[${videoIndex}:v]scale=${width}:${width},setsar=1,format=gbrp[s${videoIndex}];`
+          filterComplex += `color=black@0:s=${VIDEO_WIDTH}x${VIDEO_HEIGHT}:d=${VIDEO_DURATION}[tmp${videoIndex}];`
           
           // Overlay character on black background
           filterComplex += `[tmp${videoIndex}][s${videoIndex}]overlay=x=${x}:y=${y}:format=auto[overlay${videoIndex}];`
           
-          // Blend with screen mode
+          // Blend with screen mode (matching Python script)
           filterComplex += `[${current}][overlay${videoIndex}]blend=all_mode='screen':shortest=1[blend${videoIndex}];`
           
           current = `blend${videoIndex}`
@@ -542,9 +542,9 @@ const generateVideoHandler = async () => {
       '-c:v', 'libx264',
       '-preset', 'medium',
       '-crf', '18',
+      '-r', FPS,
       '-t', VIDEO_DURATION.toString(),
       '-pix_fmt', 'yuv420p',
-      '-movflags', '+faststart',
       'output.mp4'
     ]
 
@@ -646,7 +646,7 @@ const calculateCharacterPositions = (text) => {
     }
   }
 
-  // Center the text
+  // Center the text horizontally
   const xOffset = (VIDEO_WIDTH - totalWidth) / 2
   return positions.map(pos => pos ? [pos[0] + xOffset, pos[1]] : null)
 }
