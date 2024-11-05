@@ -6,6 +6,34 @@ export default defineNuxtConfig({
     transpile: ['@ffmpeg/ffmpeg', '@ffmpeg/util']
   },
 
+  nitro: {
+    // Add these specific Netlify configurations
+    preset: 'netlify',
+    prerender: {
+      failOnError: false,
+    },
+    // Add external modules configuration
+    externals: {
+      inline: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
+    },
+    // Add module resolution rules
+    resolve: {
+      alias: {
+        // Prevent the problematic module from being bundled
+        'nitropack/dist/presets/netlify/legacy/runtime/_deno-env-polyfill': 'unenv/runtime/polyfill/deno-env',
+      }
+    },
+    routeRules: {
+      '/**': {
+        headers: {
+          'Cross-Origin-Embedder-Policy': 'require-corp',
+          'Cross-Origin-Opener-Policy': 'same-origin',
+          'Cross-Origin-Resource-Policy': 'cross-origin'
+        }
+      }
+    }
+  },
+
   vite: {
     define: {
       'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV)
@@ -21,18 +49,6 @@ export default defineNuxtConfig({
         "Cross-Origin-Embedder-Policy": "require-corp",
         "Cross-Origin-Opener-Policy": "same-origin",
         "Cross-Origin-Resource-Policy": "cross-origin"
-      }
-    }
-  },
-
-  nitro: {
-    routeRules: {
-      '/**': {
-        headers: {
-          'Cross-Origin-Embedder-Policy': 'require-corp',
-          'Cross-Origin-Opener-Policy': 'same-origin',
-          'Cross-Origin-Resource-Policy': 'cross-origin'
-        }
       }
     }
   },
