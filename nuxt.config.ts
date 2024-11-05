@@ -25,13 +25,18 @@ export default defineNuxtConfig({
   },
 
   nitro: {
+    preset: 'netlify',
     routeRules: {
       '/**': {
         headers: {
           'Cross-Origin-Embedder-Policy': 'require-corp',
-          'Cross-Origin-Opener-Policy': 'same-origin'
+          'Cross-Origin-Opener-Policy': 'same-origin',
+          'Cross-Origin-Resource-Policy': 'cross-origin'
         }
       }
+    },
+    externals: {
+      exclude: ['node_modules/nitropack/dist/presets/netlify/legacy/runtime/_deno-env-polyfill']
     }
   },
 
