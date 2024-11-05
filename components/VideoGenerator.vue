@@ -188,7 +188,7 @@ import { useNuxtApp } from '#app'
 const VIDEO_WIDTH = 1920
 const VIDEO_HEIGHT = 1080
 const DEFAULT_CHAR_SIZE = 300
-const VIDEO_DURATION = 10 // Duration in seconds
+const VIDEO_DURATION = 3 // Duration in seconds
 const FPS = "25" // Frames per second
 
 // Reactive variables
@@ -515,32 +515,36 @@ const generateVideoHandler = async () => {
           const y = (VIDEO_HEIGHT - charSizeVar.value) / 2 + 
                    verticalOffset * (charSizeVar.value / DEFAULT_CHAR_SIZE)
 
-          filterComplex += `[${videoIndex}:v]scale=${width}:${width},setpts=PTS-STARTPTS[s${videoIndex}];`
-          filterComplex += `[${current}][s${videoIndex}]overlay=x=${x}:y=${y}:shortest=1[v${videoIndex}];`
-          current = `v${videoIndex}`
+          // Create temporary black background for each character
+          filterComplex += `[${videoIndex}:v]scale=${width}:${width}[s${videoIndex}];`
+          filterComplex += `color=black:s=${VIDEO_WIDTH}x${VIDEO_HEIGHT}:d=${VIDEO_DURATION}[tmp${videoIndex}];`
+          
+          // Overlay character on black background
+          filterComplex += `[tmp${videoIndex}][s${videoIndex}]overlay=x=${x}:y=${y}:format=auto[overlay${videoIndex}];`
+          
+          // Blend with screen mode
+          filterComplex += `[${current}][overlay${videoIndex}]blend=all_mode='screen':shortest=1[blend${videoIndex}];`
+          
+          current = `blend${videoIndex}`
           videoIndex++
         }
       }
     }
 
-    // Remove trailing semicolon from filterComplex
+    // Remove trailing semicolon
     filterComplex = filterComplex.replace(/;$/, '')
 
-    // Build FFmpeg command with hardware acceleration hints
+    // Build FFmpeg command with updated parameters
     const command = [
       ...videoData.flatMap(file => ['-i', file]),
       '-filter_complex', filterComplex,
       '-map', `[${current}]`,
       '-c:v', 'libx264',
-      '-preset', 'ultrafast',  // Faster encoding preset
-      '-tune', 'fastdecode',   // Optimize for decoding speed
-      '-crf', '28',           // Slightly lower quality for better performance
+      '-preset', 'medium',
+      '-crf', '18',
       '-t', VIDEO_DURATION.toString(),
       '-pix_fmt', 'yuv420p',
       '-movflags', '+faststart',
-      '-threads', '0',        // Let FFmpeg choose optimal thread count
-      '-flags', '+cgop',      // Closed GOP for better seeking
-      '-x264opts', 'no-mbtree:no-scenecut',  // Disable some CPU-intensive features
       'output.mp4'
     ]
 
