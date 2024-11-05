@@ -172,13 +172,16 @@
             </div>
           </form>
         </div>
+
+        <!-- Video Container -->
+        <div ref="videoContainer" class="video-container"></div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed, nextTick, onUnmounted } from 'vue'
 import { useNuxtApp } from '#app'
 
 // Constants for video parameters
@@ -206,6 +209,10 @@ const progressMessage = ref('')
 const videoUrl = ref(null) // Initialize as null
 const isFFmpegLoaded = ref(false)
 const ffmpeg = ref(null)
+
+// Add ref for video container
+const videoContainer = ref(null)
+const error = ref(null)
 
 // Letter offsets similar to Python implementation
 const letterOffsets = {
@@ -508,8 +515,8 @@ const generateVideoHandler = async () => {
           const y = (VIDEO_HEIGHT - charSizeVar.value) / 2 + 
                    verticalOffset * (charSizeVar.value / DEFAULT_CHAR_SIZE)
 
-          filterComplex += `[${videoIndex}:v]scale=${width}:${width},setsar=1[s${videoIndex}];`
-          filterComplex += `[${current}][s${videoIndex}]overlay=x=${x}:y=${y}:format=auto[v${videoIndex}];`
+          filterComplex += `[${videoIndex}:v]scale=${width}:${width},setpts=PTS-STARTPTS[s${videoIndex}];`
+          filterComplex += `[${current}][s${videoIndex}]overlay=x=${x}:y=${y}:shortest=1[v${videoIndex}];`
           current = `v${videoIndex}`
           videoIndex++
         }
@@ -519,15 +526,21 @@ const generateVideoHandler = async () => {
     // Remove trailing semicolon from filterComplex
     filterComplex = filterComplex.replace(/;$/, '')
 
+    // Build FFmpeg command with hardware acceleration hints
     const command = [
       ...videoData.flatMap(file => ['-i', file]),
       '-filter_complex', filterComplex,
       '-map', `[${current}]`,
       '-c:v', 'libx264',
-      '-preset', 'medium',
-      '-crf', '23',
+      '-preset', 'ultrafast',  // Faster encoding preset
+      '-tune', 'fastdecode',   // Optimize for decoding speed
+      '-crf', '28',           // Slightly lower quality for better performance
       '-t', VIDEO_DURATION.toString(),
       '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      '-threads', '0',        // Let FFmpeg choose optimal thread count
+      '-flags', '+cgop',      // Closed GOP for better seeking
+      '-x264opts', 'no-mbtree:no-scenecut',  // Disable some CPU-intensive features
       'output.mp4'
     ]
 
@@ -541,16 +554,47 @@ const generateVideoHandler = async () => {
       throw new Error('Generated video file is empty or invalid')
     }
 
-    // Create video URL
-    const videoBlob = new Blob([outputData.buffer], { type: 'video/mp4' })
-    if (videoUrl.value) {
-      URL.revokeObjectURL(videoUrl.value)
+    try {
+      const videoBlob = new Blob([outputData.buffer], { type: 'video/mp4' })
+      const downloadUrl = URL.createObjectURL(videoBlob)
+
+      // Create download link
+      const downloadLink = document.createElement('a')
+      downloadLink.href = downloadUrl
+      downloadLink.download = 'generated-video.mp4'
+      downloadLink.textContent = 'Download Video'
+      downloadLink.className = 'download-button'
+
+      // Create video element
+      const videoElement = document.createElement('video')
+      videoElement.src = downloadUrl
+      videoElement.controls = true
+      videoElement.autoplay = false
+      videoElement.className = 'preview-video'
+
+      // Clear previous content and append new elements
+      if (videoContainer.value) {
+        videoContainer.value.innerHTML = ''
+        videoContainer.value.appendChild(videoElement)
+        videoContainer.value.appendChild(downloadLink)
+
+        // Clean up old URL if exists
+        if (videoUrl.value) {
+          URL.revokeObjectURL(videoUrl.value)
+        }
+        videoUrl.value = downloadUrl
+
+        progress.value = 100
+        progressMessage.value = 'Video generation complete!'
+      } else {
+        throw new Error('Video container not found')
+      }
+    } catch (error) {
+      console.error('Error displaying video:', error)
+      progress.value = 0
+      progressMessage.value = `Error: ${error.message}`
+      throw error
     }
-    videoUrl.value = URL.createObjectURL(videoBlob)
-
-    progress.value = 100
-    progressMessage.value = 'Video generation complete!'
-
   } catch (error) {
     console.error('Video generation error:', error)
     errorMessage.value = `Failed to generate video: ${error.message}`
@@ -609,8 +653,53 @@ watch([text, caseVar, charSizeVar, charSpacingVar], () => {
     updatePreview()
   }
 })
+
+// Clean up URLs on unmount
+onUnmounted(() => {
+  if (videoContainer.value) {
+    const video = videoContainer.value.querySelector('video')
+    if (video && video.src) {
+      URL.revokeObjectURL(video.src)
+    }
+    const link = videoContainer.value.querySelector('a')
+    if (link && link.href) {
+      URL.revokeObjectURL(link.href)
+    }
+  }
+})
 </script>
 
 <style scoped>
-/* Add any component-specific styles here */
+.video-container {
+  width: 100%;
+  min-height: 200px;
+  margin: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.preview-video {
+  max-width: 100%;
+  height: auto;
+}
+
+.download-button {
+  padding: 0.5rem 1rem;
+  background-color: #4CAF50;
+  color: white;
+  border-radius: 4px;
+  text-decoration: none;
+  margin-top: 1rem;
+}
+
+.error-message {
+  color: #ff4444;
+  margin: 1rem 0;
+  padding: 0.5rem;
+  border: 1px solid #ff4444;
+  border-radius: 4px;
+  background: #fff5f5;
+}
 </style>
