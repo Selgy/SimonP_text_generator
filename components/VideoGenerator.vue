@@ -410,7 +410,16 @@ const updatePreview = async () => {
   }
 }
 
-// Update generateVideoHandler to handle FFmpeg commands correctly
+// Add this helper function at the top of your component
+const verifyVideoFile = async (buffer) => {
+  // Check if buffer is valid
+  if (!(buffer instanceof ArrayBuffer) || buffer.byteLength === 0) {
+    throw new Error('Invalid video file buffer');
+  }
+  return new Uint8Array(buffer);
+};
+
+// Update the video generation part
 const generateVideoHandler = async () => {
   if (!text.value.trim()) {
     errorMessage.value = 'Please enter some text'
@@ -427,48 +436,68 @@ const generateVideoHandler = async () => {
   progressMessage.value = 'Preparing to generate video...'
   errorMessage.value = ''
 
+  const videoData = []
   try {
     console.log('Starting video generation...')
-
-    // Split text into characters
     const characters = formattedText.value.split('')
-    const videoData = []
+    const inputFiles = []
+    let currentIndex = 0
 
-    // Fetch all video files first
+    // Fetch and verify all video files first
     for (let i = 0; i < characters.length; i++) {
       const char = characters[i]
+      if (char === ' ') {
+        // Skip spaces - don't try to load a video for them
+        continue
+      }
+
       try {
-        let response
-        if (char === ' ') {
-          response = await fetch('/Source/blank.mp4')
-          if (!response.ok) throw new Error('Silent video not found')
-        } else {
-          const caseType = char === char.toUpperCase() ? 'UPPER_CASE' : 'LOWER_CASE'
-          const videoPath = `/Source/${caseType}/${char.toLowerCase()}.mp4`
-          response = await fetch(videoPath)
-          if (!response.ok) throw new Error(`Video for character "${char}" not found`)
-        }
+        const caseType = char === char.toUpperCase() ? 'UPPER_CASE' : 'LOWER_CASE'
+        const videoPath = `/Source/${caseType}/${char.toLowerCase()}.mp4`
+        const response = await fetch(videoPath)
+        if (!response.ok) throw new Error(`Video not found at ${videoPath}`)
 
         const buffer = await response.arrayBuffer()
-        const fileName = `input${i}.mp4`
-        await ffmpeg.value.writeFile(fileName, new Uint8Array(buffer))
+        const verifiedData = await verifyVideoFile(buffer)
+        
+        // Use the actual character and case in the filename
+        const caseType2 = char === char.toUpperCase() ? 'upper' : 'lower'
+        const fileName = `${caseType2}_${char.toLowerCase()}_${currentIndex}.mp4`
+        
+        inputFiles.push({
+          name: fileName,
+          data: verifiedData,
+          char: char,
+          index: currentIndex
+        })
         videoData.push(fileName)
+        currentIndex++
 
+        console.log(`Processed ${videoPath} -> ${fileName}`)
         progress.value = Math.round(((i + 1) / characters.length) * 50)
         progressMessage.value = `Loading videos: ${i + 1}/${characters.length}`
       } catch (error) {
-        throw error
+        throw new Error(`Error processing character "${char}" at position ${i}: ${error.message}`)
       }
     }
 
-    // Build FFmpeg filter complex command
+    // Write files to FFmpeg's virtual filesystem
+    for (const file of inputFiles) {
+      try {
+        console.log(`Writing file ${file.name} for character "${file.char}"...`)
+        await ffmpeg.value.writeFile(file.name, file.data)
+      } catch (error) {
+        throw new Error(`Error writing file ${file.name} for character "${file.char}": ${error.message}`)
+      }
+    }
+
+    // Build FFmpeg command
     let filterComplex = `color=black:s=${VIDEO_WIDTH}x${VIDEO_HEIGHT}:d=${VIDEO_DURATION}:r=${FPS}[bg];`
     let current = 'bg'
 
-    // Calculate positions
     const positions = calculateCharacterPositions(formattedText.value)
+    let videoIndex = 0
     
-    // Add each character to the filter complex
     for (let i = 0; i < characters.length; i++) {
       if (characters[i] !== ' ') {
         const pos = positions[i]
@@ -479,14 +508,17 @@ const generateVideoHandler = async () => {
           const y = (VIDEO_HEIGHT - charSizeVar.value) / 2 + 
                    verticalOffset * (charSizeVar.value / DEFAULT_CHAR_SIZE)
 
-          filterComplex += `[${i}:v]scale=${width}:${width},setsar=1[s${i}];`
-          filterComplex += `[${current}][s${i}]overlay=x=${x}:y=${y}:format=auto[v${i}];`
-          current = `v${i}`
+          filterComplex += `[${videoIndex}:v]scale=${width}:${width},setsar=1[s${videoIndex}];`
+          filterComplex += `[${current}][s${videoIndex}]overlay=x=${x}:y=${y}:format=auto[v${videoIndex}];`
+          current = `v${videoIndex}`
+          videoIndex++
         }
       }
     }
 
-    // Prepare FFmpeg command
+    // Remove trailing semicolon from filterComplex
+    filterComplex = filterComplex.replace(/;$/, '')
+
     const command = [
       ...videoData.flatMap(file => ['-i', file]),
       '-filter_complex', filterComplex,
@@ -499,14 +531,18 @@ const generateVideoHandler = async () => {
       'output.mp4'
     ]
 
-    // Execute FFmpeg command
+    console.log('Executing FFmpeg command:', command)
+    console.log('Filter complex:', filterComplex)
     await ffmpeg.value.exec(command)
 
-    // Read the output file
-    const data = await ffmpeg.value.readFile('output.mp4')
+    // Verify output file exists and has content
+    const outputData = await ffmpeg.value.readFile('output.mp4')
+    if (!outputData || outputData.length === 0) {
+      throw new Error('Generated video file is empty or invalid')
+    }
 
     // Create video URL
-    const videoBlob = new Blob([data.buffer], { type: 'video/mp4' })
+    const videoBlob = new Blob([outputData.buffer], { type: 'video/mp4' })
     if (videoUrl.value) {
       URL.revokeObjectURL(videoUrl.value)
     }
@@ -520,6 +556,15 @@ const generateVideoHandler = async () => {
     errorMessage.value = `Failed to generate video: ${error.message}`
   } finally {
     generating.value = false
+    // Clean up files
+    try {
+      for (const file of videoData) {
+        await ffmpeg.value.deleteFile(file).catch(console.warn)
+      }
+      await ffmpeg.value.deleteFile('output.mp4').catch(console.warn)
+    } catch (e) {
+      console.warn('Error during cleanup:', e)
+    }
   }
 }
 

@@ -15,6 +15,12 @@ export default defineNuxtPlugin(async (nuxtApp) => {
           coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
           wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
         });
+        
+        // Initialize logging
+        ffmpeg.on('log', ({ message }) => {
+          console.log('FFmpeg Log:', message);
+        });
+
         loaded = true;
         console.log('FFmpeg loaded successfully from CDN');
       } catch (error) {
