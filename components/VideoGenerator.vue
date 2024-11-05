@@ -180,8 +180,6 @@
 <script setup>
 import { ref, onMounted, watch, computed } from 'vue'
 import { useNuxtApp } from '#app'
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { toBlobURL } from '@ffmpeg/util';
 
 // Constants for video parameters
 const VIDEO_WIDTH = 1920
@@ -264,15 +262,12 @@ onMounted(async () => {
   errorMessage.value = ''
 
   try {
-    ffmpeg.value = new FFmpeg()
+    // Use the plugin's FFmpeg instance instead of creating a new one
+    const { instance, load } = $ffmpeg
+    ffmpeg.value = instance
     
     progressMessage.value = 'Loading FFmpeg...'
-    const baseURL = 'https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm'
-    await ffmpeg.value.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-      workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript'),
-    })
+    await load()
     
     isFFmpegLoaded.value = true
     console.log('FFmpeg loaded successfully')
@@ -415,7 +410,7 @@ const updatePreview = async () => {
   }
 }
 
-// Update generateVideoHandler to match Python implementation
+// Update generateVideoHandler to handle FFmpeg commands correctly
 const generateVideoHandler = async () => {
   if (!text.value.trim()) {
     errorMessage.value = 'Please enter some text'
@@ -435,45 +430,33 @@ const generateVideoHandler = async () => {
   try {
     console.log('Starting video generation...')
 
-    // Split text into characters and fetch video files
+    // Split text into characters
     const characters = formattedText.value.split('')
-    const inputFiles = []
+    const videoData = []
 
-    // Fetch video files for each character
+    // Fetch all video files first
     for (let i = 0; i < characters.length; i++) {
       const char = characters[i]
       try {
+        let response
         if (char === ' ') {
-          const response = await fetch('/Source/blank.mp4')
+          response = await fetch('/Source/blank.mp4')
           if (!response.ok) throw new Error('Silent video not found')
-          const arrayBuffer = await response.arrayBuffer()
-          const inputFileName = `input_${i}.mp4`
-          await ffmpeg.value.writeFile(inputFileName, new Uint8Array(arrayBuffer))
-          inputFiles.push(inputFileName)
         } else {
           const caseType = char === char.toUpperCase() ? 'UPPER_CASE' : 'LOWER_CASE'
           const videoPath = `/Source/${caseType}/${char.toLowerCase()}.mp4`
-          
-          const response = await fetch(videoPath)
+          response = await fetch(videoPath)
           if (!response.ok) throw new Error(`Video for character "${char}" not found`)
-          const arrayBuffer = await response.arrayBuffer()
-          const inputFileName = `input_${i}.mp4`
-          await ffmpeg.value.writeFile(inputFileName, new Uint8Array(arrayBuffer))
-          inputFiles.push(inputFileName)
         }
+
+        const buffer = await response.arrayBuffer()
+        const fileName = `input${i}.mp4`
+        await ffmpeg.value.writeFile(fileName, new Uint8Array(buffer))
+        videoData.push(fileName)
 
         progress.value = Math.round(((i + 1) / characters.length) * 50)
         progressMessage.value = `Loading videos: ${i + 1}/${characters.length}`
       } catch (error) {
-        // Clean up any files that were already written
-        for (const file of inputFiles) {
-          try {
-            await ffmpeg.value.deleteFile(file)
-          } catch (e) {
-            console.warn(`Failed to clean up file ${file}:`, e)
-          }
-        }
-        console.error(`Error loading video for character "${char}":`, error)
         throw error
       }
     }
@@ -496,50 +479,41 @@ const generateVideoHandler = async () => {
           const y = (VIDEO_HEIGHT - charSizeVar.value) / 2 + 
                    verticalOffset * (charSizeVar.value / DEFAULT_CHAR_SIZE)
 
-          filterComplex += `[${i}:v]scale=${width}:${width},setsar=1,format=gbrp[s${i}];`
-          filterComplex += `color=black@0:s=${VIDEO_WIDTH}x${VIDEO_HEIGHT}:d=${VIDEO_DURATION}[tmp${i}];`
-          filterComplex += `[tmp${i}][s${i}]overlay=x=${x}:y=${y}:format=auto[overlay${i}];`
-          filterComplex += `[${current}][overlay${i}]blend=all_mode='screen':shortest=1[blend${i}];`
-          current = `blend${i}`
+          filterComplex += `[${i}:v]scale=${width}:${width},setsar=1[s${i}];`
+          filterComplex += `[${current}][s${i}]overlay=x=${x}:y=${y}:format=auto[v${i}];`
+          current = `v${i}`
         }
       }
     }
 
-    // Execute FFmpeg command
-    const args = [
-      ...inputFiles.flatMap(file => ['-i', file]),
+    // Prepare FFmpeg command
+    const command = [
+      ...videoData.flatMap(file => ['-i', file]),
       '-filter_complex', filterComplex,
       '-map', `[${current}]`,
       '-c:v', 'libx264',
       '-preset', 'medium',
-      '-crf', '18',
-      '-r', FPS,
+      '-crf', '23',
       '-t', VIDEO_DURATION.toString(),
       '-pix_fmt', 'yuv420p',
       'output.mp4'
     ]
 
-    await ffmpeg.value.exec(args)
+    // Execute FFmpeg command
+    await ffmpeg.value.exec(command)
 
-    // Clean up input files
-    for (const file of inputFiles) {
-      try {
-        await ffmpeg.value.deleteFile(file)
-      } catch (e) {
-        console.warn(`Failed to clean up file ${file}:`, e)
-      }
-    }
+    // Read the output file
+    const data = await ffmpeg.value.readFile('output.mp4')
 
-    // Read and create video URL
-    const outputData = await ffmpeg.value.readFile('output.mp4')
-    await ffmpeg.value.deleteFile('output.mp4')
-    const videoBlob = new Blob([outputData], { type: 'video/mp4' })
-    
+    // Create video URL
+    const videoBlob = new Blob([data.buffer], { type: 'video/mp4' })
     if (videoUrl.value) {
       URL.revokeObjectURL(videoUrl.value)
     }
-    
     videoUrl.value = URL.createObjectURL(videoBlob)
+
+    progress.value = 100
+    progressMessage.value = 'Video generation complete!'
 
   } catch (error) {
     console.error('Video generation error:', error)
