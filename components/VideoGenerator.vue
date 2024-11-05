@@ -178,7 +178,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useNuxtApp } from '#app'
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL } from '@ffmpeg/util';
@@ -187,6 +187,8 @@ import { toBlobURL } from '@ffmpeg/util';
 const VIDEO_WIDTH = 1920
 const VIDEO_HEIGHT = 1080
 const DEFAULT_CHAR_SIZE = 300
+const VIDEO_DURATION = 10 // Duration in seconds
+const FPS = "25" // Frames per second
 
 // Reactive variables
 const text = ref('Sample Text')
@@ -205,7 +207,7 @@ const progress = ref(0)
 const progressMessage = ref('')
 const videoUrl = ref(null) // Initialize as null
 const isFFmpegLoaded = ref(false)
-const ffmpegInstance = ref(null)
+const ffmpeg = ref(null)
 
 // Letter offsets similar to Python implementation
 const letterOffsets = {
@@ -246,6 +248,13 @@ const letterSpacingOffsets = {
   ' ': [0, 0]
 }
 
+// Add missing computed property for formattedText
+const formattedText = computed(() => {
+  if (caseVar.value === 'upper') return text.value.toUpperCase()
+  if (caseVar.value === 'lower') return text.value.toLowerCase()
+  return text.value
+})
+
 // Initialize FFmpeg and fetchFile from the plugin
 const { $ffmpeg } = useNuxtApp()
 
@@ -255,18 +264,21 @@ onMounted(async () => {
   errorMessage.value = ''
 
   try {
-    if (!$ffmpeg.loaded()) {
-      progressMessage.value = 'Loading FFmpeg...'
-      await $ffmpeg.load()
-    }
+    ffmpeg.value = new FFmpeg()
+    
+    progressMessage.value = 'Loading FFmpeg...'
+    const baseURL = 'https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm'
+    await ffmpeg.value.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript'),
+    })
+    
     isFFmpegLoaded.value = true
-    ffmpegInstance.value = $ffmpeg.instance
     console.log('FFmpeg loaded successfully')
     
     // Load preview images
     await loadPreviewImages()
-
-    // Generate initial preview
     await updatePreview()
   } catch (error) {
     console.error('Error loading FFmpeg:', error)
@@ -403,132 +415,174 @@ const updatePreview = async () => {
   }
 }
 
-// Function to generate video
+// Update generateVideoHandler to match Python implementation
 const generateVideoHandler = async () => {
   if (!text.value.trim()) {
-    errorMessage.value = 'Please enter some text';
-    return;
+    errorMessage.value = 'Please enter some text'
+    return
   }
 
-  if (!isFFmpegLoaded.value || !ffmpegInstance.value) {
-    errorMessage.value = 'FFmpeg is still loading. Please wait a moment.';
-    return;
+  if (!isFFmpegLoaded.value || !ffmpeg.value) {
+    errorMessage.value = 'FFmpeg is still loading. Please wait a moment.'
+    return
   }
 
-  generating.value = true;
-  progress.value = 0;
-  progressMessage.value = 'Preparing to generate video...';
-  errorMessage.value = '';
+  generating.value = true
+  progress.value = 0
+  progressMessage.value = 'Preparing to generate video...'
+  errorMessage.value = ''
 
   try {
-    const ffmpeg = ffmpegInstance.value;
-    console.log('Starting video generation...');
-
-    // Format text based on case selection
-    const formattedText = caseVar.value === 'upper' 
-      ? text.value.toUpperCase()
-      : caseVar.value === 'lower' 
-        ? text.value.toLowerCase()
-        : text.value;
-    console.log('Formatted text:', formattedText);
+    console.log('Starting video generation...')
 
     // Split text into characters and fetch video files
-    const characters = formattedText.split('');
-    const videoBlobs = [];
+    const characters = formattedText.value.split('')
+    const inputFiles = []
 
-    console.log('Fetching video files...');
     // Fetch video files for each character
     for (let i = 0; i < characters.length; i++) {
-      const char = characters[i];
+      const char = characters[i]
       try {
         if (char === ' ') {
-          console.log('Fetching blank video...');
-          const response = await fetch('/Source/blank.mp4');
-          if (!response.ok) throw new Error('Silent video not found');
-          const blob = await response.blob();
-          videoBlobs.push(new Uint8Array(await blob.arrayBuffer()));
+          const response = await fetch('/Source/blank.mp4')
+          if (!response.ok) throw new Error('Silent video not found')
+          const arrayBuffer = await response.arrayBuffer()
+          const inputFileName = `input_${i}.mp4`
+          await ffmpeg.value.writeFile(inputFileName, new Uint8Array(arrayBuffer))
+          inputFiles.push(inputFileName)
         } else {
-          const caseType = char === char.toUpperCase() ? 'UPPER_CASE' : 'LOWER_CASE';
-          const videoPath = `/Source/${caseType}/${char.toLowerCase()}.mp4`;
-          console.log('Fetching video:', videoPath);
+          const caseType = char === char.toUpperCase() ? 'UPPER_CASE' : 'LOWER_CASE'
+          const videoPath = `/Source/${caseType}/${char.toLowerCase()}.mp4`
           
-          const response = await fetch(videoPath);
-          if (!response.ok) {
-            console.error(`Failed to fetch video at path: ${videoPath}`);
-            throw new Error(`Video for character "${char}" not found`);
-          }
-          const blob = await response.blob();
-          videoBlobs.push(new Uint8Array(await blob.arrayBuffer()));
+          const response = await fetch(videoPath)
+          if (!response.ok) throw new Error(`Video for character "${char}" not found`)
+          const arrayBuffer = await response.arrayBuffer()
+          const inputFileName = `input_${i}.mp4`
+          await ffmpeg.value.writeFile(inputFileName, new Uint8Array(arrayBuffer))
+          inputFiles.push(inputFileName)
         }
 
-        progress.value = Math.round(((i + 1) / characters.length) * 50);
-        progressMessage.value = `Loading videos: ${i + 1}/${characters.length}`;
-        console.log(`Loaded video ${i + 1}/${characters.length}`);
+        progress.value = Math.round(((i + 1) / characters.length) * 50)
+        progressMessage.value = `Loading videos: ${i + 1}/${characters.length}`
       } catch (error) {
-        console.error(`Error loading video for character "${char}":`, error);
-        throw error;
+        // Clean up any files that were already written
+        for (const file of inputFiles) {
+          try {
+            await ffmpeg.value.deleteFile(file)
+          } catch (e) {
+            console.warn(`Failed to clean up file ${file}:`, e)
+          }
+        }
+        console.error(`Error loading video for character "${char}":`, error)
+        throw error
       }
     }
 
-    console.log('Writing concatenation list...');
-    // Write concatenation list
-    const fileList = videoBlobs.map((_, i) => `file 'char_${i}.mp4'`).join('\n');
-    await ffmpeg.writeFile('filelist.txt', new TextEncoder().encode(fileList));
-    console.log('Concatenation list written');
+    // Build FFmpeg filter complex command
+    let filterComplex = `color=black:s=${VIDEO_WIDTH}x${VIDEO_HEIGHT}:d=${VIDEO_DURATION}:r=${FPS}[bg];`
+    let current = 'bg'
 
-    console.log('Writing video files...');
-    // Write video files
-    for (let i = 0; i < videoBlobs.length; i++) {
-      try {
-        await ffmpeg.writeFile(`char_${i}.mp4`, videoBlobs[i]);
-        console.log(`Written video file ${i + 1}/${videoBlobs.length}`);
-        progress.value = 50 + Math.round(((i + 1) / videoBlobs.length) * 25);
-      } catch (error) {
-        console.error(`Error writing video file ${i}:`, error);
-        throw error;
+    // Calculate positions
+    const positions = calculateCharacterPositions(formattedText.value)
+    
+    // Add each character to the filter complex
+    for (let i = 0; i < characters.length; i++) {
+      if (characters[i] !== ' ') {
+        const pos = positions[i]
+        if (pos) {
+          const [x, width] = pos
+          const char = characters[i]
+          const verticalOffset = letterOffsets[char] || 0
+          const y = (VIDEO_HEIGHT - charSizeVar.value) / 2 + 
+                   verticalOffset * (charSizeVar.value / DEFAULT_CHAR_SIZE)
+
+          filterComplex += `[${i}:v]scale=${width}:${width},setsar=1,format=gbrp[s${i}];`
+          filterComplex += `color=black@0:s=${VIDEO_WIDTH}x${VIDEO_HEIGHT}:d=${VIDEO_DURATION}[tmp${i}];`
+          filterComplex += `[tmp${i}][s${i}]overlay=x=${x}:y=${y}:format=auto[overlay${i}];`
+          filterComplex += `[${current}][overlay${i}]blend=all_mode='screen':shortest=1[blend${i}];`
+          current = `blend${i}`
+        }
       }
     }
 
-    console.log('Executing FFmpeg command...');
     // Execute FFmpeg command
-    try {
-      await ffmpeg.exec([
-        '-f', 'concat',
-        '-safe', '0',
-        '-i', 'filelist.txt',
-        '-c', 'copy',
-        '-y',
-        'output.mp4'
-      ]);
-      console.log('FFmpeg command completed');
-    } catch (error) {
-      console.error('FFmpeg command failed:', error);
-      throw error;
+    const args = [
+      ...inputFiles.flatMap(file => ['-i', file]),
+      '-filter_complex', filterComplex,
+      '-map', `[${current}]`,
+      '-c:v', 'libx264',
+      '-preset', 'medium',
+      '-crf', '18',
+      '-r', FPS,
+      '-t', VIDEO_DURATION.toString(),
+      '-pix_fmt', 'yuv420p',
+      'output.mp4'
+    ]
+
+    await ffmpeg.value.exec(args)
+
+    // Clean up input files
+    for (const file of inputFiles) {
+      try {
+        await ffmpeg.value.deleteFile(file)
+      } catch (e) {
+        console.warn(`Failed to clean up file ${file}:`, e)
+      }
     }
 
-    console.log('Reading output file...');
-    // Read the output file
-    const outputData = await ffmpeg.readFile('output.mp4');
-    console.log('Output file read, creating blob...');
-    const videoBlob = new Blob([outputData], { type: 'video/mp4' });
+    // Read and create video URL
+    const outputData = await ffmpeg.value.readFile('output.mp4')
+    await ffmpeg.value.deleteFile('output.mp4')
+    const videoBlob = new Blob([outputData], { type: 'video/mp4' })
     
-    // Revoke previous video URL if it exists
     if (videoUrl.value) {
-      URL.revokeObjectURL(videoUrl.value);
-      console.log('Revoked previous video URL');
+      URL.revokeObjectURL(videoUrl.value)
     }
     
-    videoUrl.value = URL.createObjectURL(videoBlob);
-    console.log('New video URL created');
+    videoUrl.value = URL.createObjectURL(videoBlob)
 
   } catch (error) {
-    console.error('Video generation error:', error);
-    errorMessage.value = `Failed to generate video: ${error.message}`;
+    console.error('Video generation error:', error)
+    errorMessage.value = `Failed to generate video: ${error.message}`
   } finally {
-    generating.value = false;
-    console.log('Video generation completed');
+    generating.value = false
   }
-};
+}
+
+// Add helper function for character position calculation
+const calculateCharacterPositions = (text) => {
+  const positions = []
+  let totalWidth = 0
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    if (char.match(/[a-zA-Z0-9]/)) {
+      const case_type = char === char.toUpperCase() ? 'upper' : 'lower'
+      const [leftOffset, rightOffset] = letterSpacingOffsets[char.toLowerCase()] || [0, 0]
+      
+      totalWidth += leftOffset
+      
+      if (i > 0 && case_type === 'upper') {
+        totalWidth += charSizeVar.value * 0.2
+      }
+      
+      const charSize = case_type === 'upper' ? charSizeVar.value * 1.2 : charSizeVar.value
+      positions.push([totalWidth, charSize])
+      totalWidth += charSize + rightOffset
+      
+      if (i < text.length - 1) {
+        totalWidth += charSizeVar.value * charSpacingVar.value
+      }
+    } else if (char === ' ') {
+      positions.push(null)
+      totalWidth += 20 // space width
+    }
+  }
+
+  // Center the text
+  const xOffset = (VIDEO_WIDTH - totalWidth) / 2
+  return positions.map(pos => pos ? [pos[0] + xOffset, pos[1]] : null)
+}
 
 // Watch for changes to trigger preview update
 watch([text, caseVar, charSizeVar, charSpacingVar], () => {
