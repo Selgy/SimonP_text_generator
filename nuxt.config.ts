@@ -19,25 +19,19 @@ export default defineNuxtConfig({
     server: {
       headers: {
         "Cross-Origin-Embedder-Policy": "require-corp",
-        "Cross-Origin-Opener-Policy": "same-origin",
-        "Cross-Origin-Resource-Policy": "cross-origin"
+        "Cross-Origin-Opener-Policy": "same-origin"
       }
     }
   },
 
   nitro: {
-    preset: 'node-server',
     routeRules: {
       '/**': {
         headers: {
           'Cross-Origin-Embedder-Policy': 'require-corp',
-          'Cross-Origin-Opener-Policy': 'same-origin',
-          'Cross-Origin-Resource-Policy': 'cross-origin'
+          'Cross-Origin-Opener-Policy': 'same-origin'
         }
       }
-    },
-    externals: {
-      inline: ['node_modules/nitropack/dist/presets/netlify/legacy/runtime/_deno-env-polyfill']
     }
   },
 
