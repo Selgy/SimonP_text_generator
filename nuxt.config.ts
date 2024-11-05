@@ -26,6 +26,7 @@ export default defineNuxtConfig({
   },
 
   nitro: {
+    preset: 'node-server',
     routeRules: {
       '/**': {
         headers: {
@@ -34,6 +35,9 @@ export default defineNuxtConfig({
           'Cross-Origin-Resource-Policy': 'cross-origin'
         }
       }
+    },
+    externals: {
+      inline: ['node_modules/nitropack/dist/presets/netlify/legacy/runtime/_deno-env-polyfill']
     }
   },
 
