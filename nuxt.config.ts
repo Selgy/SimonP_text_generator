@@ -36,7 +36,7 @@ export default defineNuxtConfig({
       }
     },
     externals: {
-      inline: ['node_modules/nitropack/dist/presets/netlify/legacy/runtime/_deno-env-polyfill']
+      exclude: ['node_modules/nitropack/dist/presets/netlify/legacy/runtime/_deno-env-polyfill']
     }
   },
 
