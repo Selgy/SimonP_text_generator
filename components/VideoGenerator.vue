@@ -554,15 +554,18 @@ const generateVideoHandler = async () => {
 
     // Build FFmpeg command with updated parameters
     const command = [
+      '-hwaccel', 'auto',     // Enable hardware acceleration if available
       ...videoData.flatMap(file => ['-i', file]),
       '-filter_complex', filterComplex,
       '-map', `[${current}]`,
       '-c:v', 'libx264',
-      '-preset', 'medium',
-      '-crf', '18',
+      '-preset', 'ultrafast',
+      '-tune', 'fastdecode',
+      '-crf', '23',
       '-r', FPS,
       '-t', videoDurationVar.value.toString(),
       '-pix_fmt', 'yuv420p',
+      '-threads', 'auto',
       'output.mp4'
     ]
 
