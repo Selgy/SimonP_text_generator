@@ -100,6 +100,22 @@
               />
             </div>
 
+            <!-- Space Width -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Space Width: {{ spaceWidthVar.toFixed(2) }}
+              </label>
+              <input
+                type="range"
+                v-model.number="spaceWidthVar"
+                @input="updatePreview"
+                min="-10"
+                max="10"
+                step="0.05"
+                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+
             <!-- Video Duration -->
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -207,10 +223,11 @@ const DEFAULT_CHAR_SIZE = 300
 const FPS = "25" // Frames per second
 
 // Reactive variables
-const text = ref('Sample Text')
+const text = ref('Sample text')
 const caseVar = ref('mixed')
 const charSizeVar = ref(300)
 const charSpacingVar = ref(-0.8)
+const spaceWidthVar = ref(0.1)
 const previewUrl = ref('')
 const previewCanvas = ref(null)
 const previewCtx = ref(null)
@@ -252,14 +269,14 @@ const letterSpacingOffsets = {
   'A': [-4, -4], 'B': [-4, -4], 'C': [-4, -4], 'D': [-4, -4], 'E': [-4, -4],
   'F': [-4, -4], 'G': [-4, -4], 'H': [-4, -4], 'I': [-4, -4], 'J': [-4, -4],
   'K': [-4, -4], 'L': [-4, -4], 'M': [4, 4], 'N': [-4, -4], 'O': [-4, -4],
-  'P': [-4, -4], 'Q': [-4, -4], 'R': [-4, -4], 'S': [-4, -4], 'T': [-4, -4],
+  'P': [-4, -4], 'Q': [-4, -4], 'R': [-4, -4], 'S': [-9, -9], 'T': [-4, -4],
   'U': [-4, -4], 'V': [-4, -4], 'W': [-4, -4], 'X': [-4, -4], 'Y': [-4, -4],
   'Z': [-4, -4],
   // Lowercase letters
   'a': [0, 0], 'b': [0, 0], 'c': [0, 0], 'd': [0, 0], 'e': [0, 0],
-  'f': [0, 0], 'g': [0, 0], 'h': [0, 0], 'i': [-10, -10], 'j': [-10, -10],
+  'f': [0, 0], 'g': [0, 0], 'h': [0, 0], 'i': [0, 0], 'j': [-10, -10],
   'k': [0, 0], 'l': [-10, -10], 'm': [4, 4], 'n': [0, 0], 'o': [0, 0],
-  'p': [0, 0], 'q': [0, 0], 'r': [0, 0], 's': [0, 0], 't': [-10, -10],
+  'p': [0, 0], 'q': [0, 0], 'r': [0, 0], 's': [0, 0], 't': [-4, -4],
   'u': [0, 0], 'v': [0, 0], 'w': [16, 10], 'x': [0, 0], 'y': [0, 0],
   'z': [0, 0],
   // Numbers and space
@@ -379,9 +396,9 @@ const updatePreview = async () => {
       const char = formattedText[i]
       if (char.match(/[a-zA-Z0-9]/)) {
         const case_type = char === char.toUpperCase() ? 'upper' : 'lower'
-        const [leftOffset, rightOffset] = letterSpacingOffsets[char.toLowerCase()] || [0, 0]
+        const [leftOffset, rightOffset] = letterSpacingOffsets[char] || [0, 0]
         
-        totalWidth += leftOffset
+        totalWidth += leftOffset * (charSizeVar.value / DEFAULT_CHAR_SIZE)
         
         if (i > 0 && case_type === 'upper') {
           totalWidth += charSizeVar.value * 0.2
@@ -389,14 +406,16 @@ const updatePreview = async () => {
         
         const charSize = case_type === 'upper' ? charSizeVar.value * 1.2 : charSizeVar.value
         charPositions.push([totalWidth, charSize])
-        totalWidth += charSize + rightOffset
+        
+        totalWidth += charSize + (rightOffset * (charSizeVar.value / DEFAULT_CHAR_SIZE))
         
         if (i < formattedText.length - 1) {
           totalWidth += charSizeVar.value * charSpacingVar.value
         }
       } else if (char === ' ') {
         charPositions.push(null)
-        totalWidth += 20 // space width
+        // Use spaceWidthVar for space width control
+        totalWidth += charSizeVar.value * spaceWidthVar.value
       }
     }
 
@@ -646,9 +665,9 @@ const calculateCharacterPositions = (text) => {
     const char = text[i]
     if (char.match(/[a-zA-Z0-9]/)) {
       const case_type = char === char.toUpperCase() ? 'upper' : 'lower'
-      const [leftOffset, rightOffset] = letterSpacingOffsets[char.toLowerCase()] || [0, 0]
+      const [leftOffset, rightOffset] = letterSpacingOffsets[char] || [0, 0]
       
-      totalWidth += leftOffset
+      totalWidth += leftOffset * (charSizeVar.value / DEFAULT_CHAR_SIZE)
       
       if (i > 0 && case_type === 'upper') {
         totalWidth += charSizeVar.value * 0.2
@@ -656,24 +675,25 @@ const calculateCharacterPositions = (text) => {
       
       const charSize = case_type === 'upper' ? charSizeVar.value * 1.2 : charSizeVar.value
       positions.push([totalWidth, charSize])
-      totalWidth += charSize + rightOffset
+      
+      totalWidth += charSize + (rightOffset * (charSizeVar.value / DEFAULT_CHAR_SIZE))
       
       if (i < text.length - 1) {
         totalWidth += charSizeVar.value * charSpacingVar.value
       }
     } else if (char === ' ') {
       positions.push(null)
-      totalWidth += 20 // space width
+      // Use spaceWidthVar for space width control
+      totalWidth += charSizeVar.value * spaceWidthVar.value
     }
   }
 
-  // Center the text horizontally
   const xOffset = (VIDEO_WIDTH - totalWidth) / 2
   return positions.map(pos => pos ? [pos[0] + xOffset, pos[1]] : null)
 }
 
 // Watch for changes to trigger preview update
-watch([text, caseVar, charSizeVar, charSpacingVar, videoDurationVar], () => {
+watch([text, caseVar, charSizeVar, charSpacingVar, videoDurationVar, spaceWidthVar], () => {
   if (previewLoaded.value) {
     updatePreview()
   }
