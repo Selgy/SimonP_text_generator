@@ -103,7 +103,7 @@
             <!-- Space Width -->
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">
-                Space Width: {{ spaceWidthVar.toFixed(2) }}
+                Space Width: {{ spaceWidthVar ? spaceWidthVar.toFixed(2) : '0.00' }}
               </label>
               <input
                 type="range"
@@ -215,6 +215,7 @@
 <script setup>
 import { ref, onMounted, watch, computed, nextTick, onUnmounted } from 'vue'
 import { useNuxtApp } from '#app'
+import { FFmpeg } from '@ffmpeg/ffmpeg';
 
 // Constants for video parameters
 const VIDEO_WIDTH = 1920
@@ -240,7 +241,7 @@ const progress = ref(0)
 const progressMessage = ref('')
 const videoUrl = ref(null) // Initialize as null
 const isFFmpegLoaded = ref(false)
-const ffmpeg = ref(null)
+const ffmpeg = ref(null);
 
 // Add ref for video container
 const videoContainer = ref(null)
@@ -300,32 +301,39 @@ const { $ffmpeg } = useNuxtApp()
 
 // Initialize FFmpeg when component mounts
 onMounted(async () => {
-  loading.value = true
-  errorMessage.value = ''
-
-  try {
-    // Use the plugin's FFmpeg instance instead of creating a new one
-    const { instance, load } = $ffmpeg
-    ffmpeg.value = instance
-    
-    progressMessage.value = 'Loading FFmpeg...'
-    await load()
-    
-    isFFmpegLoaded.value = true
-    console.log('FFmpeg loaded successfully')
-    
-    // Load preview images
-    await loadPreviewImages()
-    await updatePreview()
-  } catch (error) {
-    console.error('Error loading FFmpeg:', error)
-    errorMessage.value = 'Failed to load FFmpeg. Please check your internet connection and refresh.'
-    isFFmpegLoaded.value = false
-  } finally {
-    loading.value = false
-    progressMessage.value = ''
+  if (process.client) {
+    try {
+      const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+      const { toBlobURL } = await import('@ffmpeg/util');
+      
+      ffmpeg.value = new FFmpeg();
+      await ffmpeg.value.load({
+        coreURL: await toBlobURL(
+          'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js',
+          'text/javascript'
+        ),
+        wasmURL: await toBlobURL(
+          'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm',
+          'application/wasm'
+        )
+      });
+      
+      isFFmpegLoaded.value = true;
+      console.log('FFmpeg loaded successfully');
+      
+      // Load preview images
+      await loadPreviewImages();
+      await updatePreview();
+    } catch (error) {
+      console.error('Error loading FFmpeg:', error);
+      errorMessage.value = 'Failed to load FFmpeg. Please check your setup and refresh.';
+      isFFmpegLoaded.value = false;
+    } finally {
+      loading.value = false;
+      progressMessage.value = '';
+    }
   }
-})
+});
 
 // Function to load preview images
 const loadPreviewImages = async () => {
