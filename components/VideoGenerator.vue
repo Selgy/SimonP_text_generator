@@ -581,18 +581,19 @@ const generateVideoHandler = async () => {
 
     // Build FFmpeg command with updated parameters
     const command = [
-      '-hwaccel', 'auto',     // Enable hardware acceleration if available
+      '-hwaccel', 'auto',     // Enable hardware acceleration
+      '-threads', '0',        // Use all available CPU threads
       ...videoData.flatMap(file => ['-i', file]),
       '-filter_complex', filterComplex,
       '-map', `[${current}]`,
-      '-c:v', 'libx264',
-      '-preset', 'ultrafast',
+      '-c:v', 'libx264',     // Use H.264 codec
+      '-preset', 'veryfast', // Use faster preset
       '-tune', 'fastdecode',
       '-crf', '23',
       '-r', FPS,
       '-t', videoDurationVar.value.toString(),
       '-pix_fmt', 'yuv420p',
-      '-threads', 'auto',
+      '-movflags', '+faststart', // Enable fast start for web playback
       'output.mp4'
     ]
 

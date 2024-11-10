@@ -11,7 +11,7 @@ export default defineNuxtConfig({
       'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV)
     },
     optimizeDeps: {
-      include: ['@ffmpeg/ffmpeg', '@ffmpeg/util']
+      exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util']
     },
     resolve: {
       mainFields: ['browser', 'module', 'main']
@@ -19,7 +19,22 @@ export default defineNuxtConfig({
     server: {
       headers: {
         "Cross-Origin-Embedder-Policy": "require-corp",
-        "Cross-Origin-Opener-Policy": "same-origin"
+        "Cross-Origin-Opener-Policy": "same-origin",
+        'Cross-Origin-Resource-Policy': 'cross-origin',
+        'Content-Security-Policy': {
+          'img-src': ["'self'", 'data:', 'blob:'],
+          'media-src': ["'self'", 'blob:'],
+          'connect-src': ["'self'", 'https://unpkg.com', 'http://localhost:*', 'blob:'],
+          'script-src': ["'self'", 'https://unpkg.com', "'unsafe-inline'", "'unsafe-eval'", 'http://localhost:*'],
+          'worker-src': ["'self'", 'blob:'],
+          'child-src': ["'self'", 'blob:'],
+          'frame-src': ["'self'", 'blob:'],
+          'default-src': ["'self'", 'blob:', 'https:', 'http:', 'data:'],
+          'style-src': ["'self'", "'unsafe-inline'"],
+          'base-uri': ["'self'"],
+          'frame-ancestors': ["'self'"],
+          'upgrade-insecure-requests': true
+        }
       }
     }
   },
@@ -47,44 +62,29 @@ export default defineNuxtConfig({
   security: {
     strict: false,
     headers: {
+      crossOriginEmbedderPolicy: 'require-corp',
+      crossOriginOpenerPolicy: 'same-origin',
       crossOriginResourcePolicy: 'cross-origin',
-      crossOriginOpenerPolicy: 'unsafe-none',
-      crossOriginEmbedderPolicy: 'unsafe-none',
       contentSecurityPolicy: {
         'base-uri': ["'none'"],
-        'font-src': ["'self'", 'https:', 'data:'],
+        'font-src': ["'self'", "https:", "data:"],
         'form-action': ["'self'"],
-        'frame-ancestors': ["'self'", 'http://localhost:*'],
-        'img-src': ["'self'", 'data:', 'blob:'],
+        'img-src': ["'self'", "data:", "blob:"],
         'object-src': ["'none'"],
         'script-src-attr': ["'none'"],
-        'style-src': ["'self'", 'https:', "'unsafe-inline'"],
-        'script-src': ["'self'", 'https:', "'unsafe-inline'", "'strict-dynamic'", "'nonce-{{nonce}}'", 'http://localhost:*'],
-        'upgrade-insecure-requests': true,
-        'connect-src': ["'self'", 'https://unpkg.com', 'http://localhost:*'],
-        'frame-src': ["'self'", 'http://localhost:*'],
-        'worker-src': ["'self'", 'blob:'],
-        'child-src': ["'self'", 'blob:'],
-        'media-src': ["'self'", 'blob:']
-      },
-      originAgentCluster: '?1',
-      referrerPolicy: 'no-referrer',
-      strictTransportSecurity: {
-        maxAge: 15552000,
-        includeSubdomains: true,
-      },
-      xContentTypeOptions: 'nosniff',
-      xDNSPrefetchControl: 'off',
-      xDownloadOptions: 'noopen',
-      xFrameOptions: 'SAMEORIGIN',
-      xPermittedCrossDomainPolicies: 'none',
-      xXSSProtection: '0',
-      permissionsPolicy: {
-        camera: [],
-        'display-capture': [],
-        fullscreen: [],
-        geolocation: [],
-        microphone: []
+        'style-src': ["'self'", "https:", "'unsafe-inline'"],
+        'script-src': [
+          "'self'",
+          "https:",
+          "'unsafe-inline'",
+          "'strict-dynamic'",
+          "'nonce-{{nonce}}'"
+        ],
+        'worker-src': ["'self'", "blob:"],
+        'child-src': ["'self'", "blob:"],
+        'frame-src': ["'self'", "blob:"],
+        'connect-src': ["'self'", "https://unpkg.com", "http://localhost:*", "blob:"],
+        'upgrade-insecure-requests': true
       }
     },
     requestSizeLimiter: {
