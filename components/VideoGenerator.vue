@@ -224,11 +224,11 @@ const DEFAULT_CHAR_SIZE = 300
 const FPS = "25" // Frames per second
 
 // Reactive variables
-const text = ref('Sample text')
+const text = ref('Microfrancophonie') //Sample text
 const caseVar = ref('mixed')
-const charSizeVar = ref(300)
-const charSpacingVar = ref(-0.8)
-const spaceWidthVar = ref(0.1)
+const charSizeVar = ref(330)
+const charSpacingVar = ref(-0.83)
+const spaceWidthVar = ref(-0.05)
 const previewUrl = ref('')
 const previewCanvas = ref(null)
 const previewCtx = ref(null)
@@ -251,13 +251,13 @@ const error = ref(null)
 const letterOffsets = {
   // Uppercase letters
   'A': -50, 'B': -50, 'C': -50, 'D': -50, 'E': -50, 'F': -50, 'G': -50,
-  'H': -50, 'I': -50, 'J': -50, 'K': -50, 'L': -50, 'M': -50, 'N': -50,
+  'H': -50, 'I': -50, 'J': -50, 'K': -50, 'L': -50, 'M': -51, 'N': -50,
   'O': -50, 'P': -50, 'Q': -50, 'R': -50, 'S': -50, 'T': -50, 'U': -50,
   'V': -50, 'W': -50, 'X': -50, 'Y': -50, 'Z': -50,
   // Lowercase letters
-  'a': 0, 'b': 0, 'c': 0, 'd': -10, 'e': 0, 'f': -10, 'g': 10,
+  'a': 2, 'b': 0, 'c': 0, 'd': -10, 'e': 0, 'f': -10, 'g': 10,
   'h': 0, 'i': -10, 'j': -8, 'k': -10, 'l': -8, 'm': 0, 'n': 0,
-  'o': 0, 'p': 10, 'q': 10, 'r': 0, 's': 0, 't': -8, 'u': 0,
+  'o': 2, 'p': 10, 'q': 10, 'r': 0, 's': 0, 't': -8, 'u': 0,
   'v': -8, 'w': -8, 'x': 0, 'y': 15, 'z': 10,
   // Numbers
   '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0,
@@ -268,15 +268,15 @@ const letterOffsets = {
 const letterSpacingOffsets = {
   // Uppercase letters
   'A': [-4, -4], 'B': [-4, -4], 'C': [-4, -4], 'D': [-4, -4], 'E': [-4, -4],
-  'F': [-4, -4], 'G': [-4, -4], 'H': [-4, -4], 'I': [-4, -4], 'J': [-4, -4],
+  'F': [-4, -10], 'G': [-4, -4], 'H': [-4, -4], 'I': [-4, -4], 'J': [-4, -4],
   'K': [-4, -4], 'L': [-4, -4], 'M': [4, 4], 'N': [-4, -4], 'O': [-4, -4],
   'P': [-4, -4], 'Q': [-4, -4], 'R': [-4, -4], 'S': [-9, -9], 'T': [-4, -4],
   'U': [-4, -4], 'V': [-4, -4], 'W': [-4, -4], 'X': [-4, -4], 'Y': [-4, -4],
   'Z': [-4, -4],
   // Lowercase letters
-  'a': [0, 0], 'b': [0, 0], 'c': [0, 0], 'd': [0, 0], 'e': [0, 0],
-  'f': [0, 0], 'g': [0, 0], 'h': [0, 0], 'i': [0, 0], 'j': [-10, -10],
-  'k': [0, 0], 'l': [-10, -10], 'm': [4, 4], 'n': [0, 0], 'o': [0, 0],
+  'a': [0, 0], 'b': [0, 0], 'c': [0, 0], 'd': [0, 0], 'e': [-4, 0],
+  'f': [0, 0], 'g': [0, 0], 'h': [4, 4], 'i': [0, 0], 'j': [-10, -10],
+  'k': [0, 0], 'l': [-10, -10], 'm': [4, 4], 'n': [0, 0], 'o': [0, 5],
   'p': [0, 0], 'q': [0, 0], 'r': [0, 0], 's': [0, 0], 't': [-4, -4],
   'u': [0, 0], 'v': [0, 0], 'w': [16, 10], 'x': [0, 0], 'y': [0, 0],
   'z': [0, 0],
