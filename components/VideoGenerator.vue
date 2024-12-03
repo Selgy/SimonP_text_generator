@@ -224,7 +224,7 @@ const DEFAULT_CHAR_SIZE = 300
 const FPS = "25" // Frames per second
 
 // Reactive variables
-const text = ref('Microfrancophonie') //Sample text
+const text = ref('Sample text') //Sample text
 const caseVar = ref('mixed')
 const charSizeVar = ref(330)
 const charSpacingVar = ref(-0.83)
@@ -255,7 +255,7 @@ const letterOffsets = {
   'O': -50, 'P': -50, 'Q': -50, 'R': -50, 'S': -50, 'T': -50, 'U': -50,
   'V': -50, 'W': -50, 'X': -50, 'Y': -50, 'Z': -50,
   // Lowercase letters
-  'a': 2, 'b': 0, 'c': 0, 'd': -10, 'e': 0, 'f': -10, 'g': 10,
+  'a': 2, 'b': -10, 'c': 0, 'd': -10, 'e': 0, 'f': -10, 'g': 10,
   'h': 0, 'i': -10, 'j': -8, 'k': -10, 'l': -8, 'm': 0, 'n': 0,
   'o': 2, 'p': 10, 'q': 10, 'r': 0, 's': 0, 't': -8, 'u': 0,
   'v': -8, 'w': -8, 'x': 0, 'y': 15, 'z': 10,
